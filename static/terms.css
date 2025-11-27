@@ -1,0 +1,277 @@
+/* General Styling */
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f9f9f9;
+    color: #333;
+    display: flex;
+    /* Enable Flexbox layout */
+    flex-direction: column;
+    /* Stack elements vertically */
+    min-height: 100vh;
+    /* Ensure body takes up full height of viewport */
+}
+
+/* Main Container */
+.container {
+    flex: 1;
+    /* Allow container to grow and push footer down */
+    max-width: 900px;
+    width: 90%;
+    background: #ffffff;
+    padding: 30px 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin: 30px auto;
+}
+
+/* Heading Styling */
+h2 {
+    text-align: center;
+    font-size: 2rem;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+}
+
+/* Paragraph Styling */
+p {
+    margin-bottom: 15px;
+    text-align: justify;
+    font-size: 1rem;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* Strong and Emphasis Text */
+strong {
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+em {
+    font-style: italic;
+    color: #555;
+}
+
+/* Links */
+a {
+    color: #3498db;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: #217dbb;
+    text-decoration: underline;
+}
+
+/* Footer Styling */
+footer {
+    text-align: center;
+    padding: 10px;
+    background: #f4f4f4;
+    font-size: 0.85rem;
+    color: #333;
+    margin-top: auto;
+    /* Push footer to the bottom */
+    width: 100%;
+    /* Ensure footer spans full width */
+    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 20px;
+    }
+
+    h2 {
+        font-size: 1.8rem;
+    }
+
+    p {
+        font-size: 0.9rem;
+    }
+
+    footer {
+        font-size: 0.8rem;
+        padding: 8px;
+    }
+}
+/* Menu Container and Button */
+.menu-container {
+    position: absolute;
+    top: 20px;
+    /* Set the distance from the top */
+    right: 20px;
+    /* Set the distance from the right */
+    z-index: 1000;
+    /* Ensure it appears above other elements */
+}
+
+.menu-icon {
+    font-size: 24px;
+    /* Icon size */
+    cursor: pointer;
+    color: #007bff;
+    /* Default blue color for the icon */
+    padding: 10px;
+    border-radius: 50%;
+    background: #f4f4f4;
+    /* Light background to make it visible */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* Add a soft shadow for depth */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.menu-icon:hover {
+    background: #007bff;
+    /* Highlight background on hover */
+    color: white;
+    /* Change icon color to white on hover */
+}
+
+/* Menu Dropdown */
+.menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 50px;
+    /* Position the dropdown below the menu button */
+    right: 0;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 250px;
+    text-align: left;
+    z-index: 1000;
+}
+
+/* Menu Items */
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* Space between icon and text */
+    margin-bottom: 20px;
+    /* Space between menu items */
+}
+
+.menu-item a {
+    text-decoration: none;
+    /* Remove underline from links */
+    font-size: 16px;
+    /* Font size for links */
+    color: #007bff;
+    /* Default blue color for links */
+    transition: color 0.3s ease;
+}
+
+.menu-item a:hover {
+    color: #0056b3;
+    /* Darker blue color on hover */
+    text-decoration: underline;
+    /* Underline the link on hover */
+}
+
+/* Icons in Menu Items */
+.menu-item i {
+    font-size: 18px;
+    /* Icon size */
+    color: #007bff;
+    /* Default blue color for icons */
+}
+
+/* Section Headings */
+.menu-dropdown h3 {
+    font-size: 14px;
+    color: #555;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* Subscription Plans Section */
+.menu-dropdown ul {
+    list-style: none;
+    /* Remove default list styling */
+    padding: 0;
+    margin: 0;
+}
+
+.menu-dropdown ul li {
+    margin-bottom: 10px;
+    /* Space between list items */
+    display: flex;
+    /* Use flexbox to align items horizontally */
+    align-items: center;
+    /* Vertically align the icon and text */
+    gap: 8px;
+    /* Add space between the tick icon and link */
+}
+
+.menu-dropdown ul li i {
+    color: #007bff;
+    /* Default blue color for the tick icon */
+    font-size: 16px;
+    /* Icon size */
+}
+
+.menu-dropdown ul li a {
+    text-decoration: none;
+    /* Remove underline from links */
+    font-size: 14px;
+    /* Font size for links */
+    color: #007bff;
+    /* Default blue color for links */
+    transition: color 0.3s ease;
+}
+
+.menu-dropdown ul li a:hover {
+    color: #0056b3;
+    /* Darker blue color on hover */
+    text-decoration: underline;
+    /* Underline the link on hover */
+}
+
+/* Logout Link */
+.logout-link {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ff4757;
+    /* Red color for logout link */
+}
+
+.logout-link:hover {
+    color: #e84141;
+    text-decoration: underline;
+}
+
+
+/* Profile Details */
+.profile-details {
+    display: none;
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: 10px;
+}
+
+.profile-details img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+}
+
+.profile-details p {
+    font-size: 14px;
+    margin: 5px 0;
+}

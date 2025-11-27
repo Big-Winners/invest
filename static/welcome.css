@@ -1,0 +1,98 @@
+/* General Styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', Arial, sans-serif;
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Branding */
+.brand-name {
+    font-weight: 800;
+    color: #FFD700;
+    /* Golden branding color */
+}
+
+/* Left Section */
+.left-section {
+    background: linear-gradient(to bottom right, #007bff, #0056b3);
+    /* Blue gradient background */
+    min-height: 100vh;
+    padding: 40px 20px;
+    color: white;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.left-section h2 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.left-section p {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.left-section .btn-light {
+    background: white;
+    color: #007bff;
+    border-radius: 25px;
+    font-weight: 600;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: background 0.3s, transform 0.2s;
+}
+
+.left-section .btn-light:hover {
+    background: #f8f9fa;
+    color: #0056b3;
+    transform: translateY(-2px);
+}
+
+/* Logo Styles */
+.left-section img {
+    max-width: 150px;
+    border-radius: 10px;
+    /* Rounded corners */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    /* Add shadow for depth */
+    margin-bottom: 20px;
+}
+
+/* Footer */
+.footer {
+    background: #f8f9fa;
+    font-size: 14px;
+    color: #555;
+    border-top: 1px solid #ddd;
+    padding: 10px;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .left-section h2 {
+        font-size: 1.8rem;
+        /* Adjust font size for smaller screens */
+    }
+
+    .left-section p {
+        font-size: 0.9rem;
+        /* Reduce text size */
+    }
+
+    .btn {
+        font-size: 0.9rem;
+        padding: 10px 20px;
+    }
+
+    .footer {
+        font-size: 0.8rem;
+    }
+}

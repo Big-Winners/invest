@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms & Conditions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='terms.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+
+<body>
+    <!-- Menu Icon -->
+    <div class="menu-container">
+        <i class="fas fa-bars menu-icon" onclick="toggleMenu()"></i>
+        <div class="menu-dropdown" id="menuDropdown">
+            <!-- Home Section -->
+            <div class="menu-item">
+                <a href="/dashboard"><i class="fas fa-home"></i> <span>Home</span></a>
+            </div>
+
+            <!-- Profile Section -->
+            <div class="menu-item profile-section">
+                <a href="javascript:void(0);" onclick="toggleProfileDetails()">
+                    <i class="fas fa-user-circle"></i> <span>Profile</span>
+                </a>
+            </div>
+            <div class="profile-details" id="profileDetails">
+                <!-- Profile Picture or Initials -->
+                <div class="profile-picture-container" id="profilePictureContainer">
+                    <img id="profilePicture"
+                        src="{{ url_for('static', filename='uploads/' + session.get('profile_picture', 'default.jpg')) }}"
+                        alt="Profile Picture">
+                </div>
+                <p><i class="fas fa-user"></i> <strong>Username:</strong> {{ session.get('user', 'Guest') }}</p>
+                <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not available')
+                    }}</p>
+            </div>
+
+            <h3><i class="fas fa-file-contract"></i> Subscription Plans</h3>
+            <ul>
+                
+                <li><i class="fas fa-check"></i> <a href="/invest">Standard Plan</a></li>
+                <li><i class="fas fa-check"></i> <a href="/invest">VIP Plan</a></li>
+            </ul>
+            <h3><i class="fas fa-list"></i> More Options</h3>
+            <ul>
+                <li>
+                    <a href="/account-settings">
+                        <i class="fas fa-cog"></i> <span>Account Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/about">
+                        <i class="fas fa-info-circle"></i> <span>About Us</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('terms') }}">
+                        <i class="fas fa-file-alt"></i> <span>Terms & Conditions</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/logout">
+                        <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <h2>Terms & Conditions</h2>
+
+        <p>Welcome to Big Winners. These Terms and Conditions ("Terms") govern your access to and use of our website,
+            platform, and investment services. By using our services, you agree to comply with and be legally bound by
+            these Terms. If you do not agree with any part of these Terms, you must refrain from using our services.</p>
+
+        <h3>1. Company Information</h3>
+        <p>Big Winners is a forex investment platform offering short-term trading opportunities in the foreign exchange
+            market. Founded in 2019, we provide clients with the opportunity to earn up to five times their initial
+            capital through 6–12 hour trading cycles.</p>
+
+        <h3>2. Eligibility</h3>
+        <ul>
+            <li>Are at least 18 years of age or the legal age of majority in your jurisdiction.</li>
+            <li>Have the legal capacity to enter into binding contracts.</li>
+            <li>Are not barred from accessing financial services under any applicable law or regulation.</li>
+            <li>Understand and accept the financial risks associated with forex trading.</li>
+        </ul>
+
+        <h3>3. Investment Model</h3>
+        <ul>
+            <li>Investments are structured around 6 to 12-hour short-term trading cycles.</li>
+            <li>Clients may receive returns of up to five times their initial capital, depending on prevailing market
+                conditions and trading performance.</li>
+            <li>Past performance does not guarantee future results.</li>
+        </ul>
+
+        <h3>4. Deposits and Withdrawals</h3>
+        <ul>
+            <li>We accept multiple payment options, including M-Pesa, Airtel Money, Visa, and other recognized mobile
+                and card-based platforms.</li>
+            <li>All deposits must be confirmed and cleared before trades are initiated.</li>
+            <li>Withdrawals are processed instantly after the investment cycle concludes, provided that all account
+                verifications have been completed.</li>
+            <li>We reserve the right to delay withdrawals for further verification when necessary for fraud prevention
+                or regulatory compliance.</li>
+        </ul>
+        <h3>5. Risk Disclosure</h3>
+        <p>At Big Winners, we prioritize transparency, responsibility, and investor confidence. While all forms of trading—forex
+            included—carry inherent risks, our team has developed a highly advanced Signal Intelligence System (SIS™) designed
+            to minimize exposure and maximize potential returns.</p>
+        <p>Our algorithmic tools use real-time market data, pattern recognition, and predictive analytics to identify low-risk
+            opportunities in short-term trading windows. While no system can eliminate risk entirely, our methods significantly
+            reduce it, making Big Winners one of the most trusted platforms in short-term forex trading.</p>
+        <ul>
+            <li><strong>🔒 Risk-Reduction Technology:</strong> Advanced signal filtering to avoid volatile trades</li>
+            <li><strong>⏱ Short-Term Investment Focus:</strong> Returns within 6 to 12 hours based on selected plans</li>
+            <li><strong>🤖 AI-Powered Decision Making:</strong> Precision-based trade execution</li>
+            <li><strong>📈 Historically Consistent Returns:</strong> Strong past performance and client satisfaction</li>
+        </ul>
+        <p>We encourage our users to invest responsibly and start with amounts they’re comfortable with. Our customer support
+            and account advisors are available to guide you every step of the way.</p>
+        <blockquote>
+            <em>“We can’t eliminate risk—but we can help you outsmart it.” – Big Winners Strategy Team</em>
+            </blockquote>
+
+        <h3>6. Account Registration and Security</h3>
+        <ul>
+            <li>You are responsible for providing accurate, current, and complete information during registration.</li>
+            <li>You agree to safeguard your account login credentials and notify us immediately of any unauthorized
+                access.</li>
+            <li>We are not liable for any loss resulting from unauthorized access to your account.</li>
+        </ul>
+
+        <h3>7. Prohibited Activities</h3>
+        <ul>
+            <li>Use the platform for any illegal or fraudulent activity.</li>
+            <li>Manipulate or interfere with the platform’s operations or performance.</li>
+            <li>Submit false or misleading information.</li>
+            <li>Engage in money laundering or violate any applicable financial regulation.</li>
+        </ul>
+
+        <h3>8. Termination of Services</h3>
+        <p>Big Winners reserves the right to suspend or terminate access to your account at its sole discretion,
+            including but not limited to cases of suspected fraud, breach of these Terms, or regulatory non-compliance.
+        </p>
+
+        <h3>9. Limitation of Liability</h3>
+        <p>To the fullest extent permitted by law, Big Winners shall not be liable for any indirect, incidental,
+            special, or consequential damages arising from:</p>
+        <ul>
+            <li>The use or inability to use our platform.</li>
+            <li>Delays or errors in transaction processing.</li>
+            <li>Unauthorized access or alteration of your data.</li>
+        </ul>
+
+        <h3>10. Intellectual Property</h3>
+        <p>All content, trademarks, logos, and intellectual property displayed on our platform remain the exclusive
+            property of Big Winners and may not be copied, reproduced, or distributed without written permission.</p>
+
+        <h3>11. Privacy Policy</h3>
+        <p>Your use of our platform is also governed by our Privacy Policy, which outlines how we collect, use, and
+            safeguard your personal data.</p>
+
+        <h3>12. Governing Law</h3>
+        <p>These Terms shall be governed and construed in accordance with the laws of [Insert Country or Jurisdiction].
+            Any disputes arising from or related to these Terms shall be resolved through arbitration or in the courts
+            of competent jurisdiction in that region.</p>
+
+        <h3>13. Modifications</h3>
+        <p>We reserve the right to modify these Terms at any time. Updated Terms will be posted on our website, and
+            continued use of our services constitutes your acceptance of the revised Terms.</p>
+
+        <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+    </div>
+    <script>
+        function toggleMenu() {
+            const menuDropdown = document.getElementById('menuDropdown');
+            menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleProfileDetails() {
+            const profileDetails = document.getElementById('profileDetails');
+            profileDetails.style.display = profileDetails.style.display === 'block' ? 'none' : 'block';
+        }
+    </script>
+
+    
+
+</body>
+<footer>
+    <p>&copy; 2025 Big Winners. All rights reserved.</p>
+</footer>
+</html>

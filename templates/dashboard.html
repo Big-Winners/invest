@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Track live forex rates, manage investments, and convert currencies effortlessly.">
+    <meta name="keywords" content="Forex, Investment, Currency Conversion, Dashboard">
+    <meta name="author" content="Big Winners">
+    <title>FX Pricing Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <!-- Font Awesome for icons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+    <div class="container mt-3">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+    
+      
+    <!-- Welcome Back Banner -->
+    <div class="welcome-banner">
+        <h3>Welcome back, {{ session.get('user', 'User') }}!</h3>
+        <p>You have invested {{ session.get('total_investment', '$0') }} so far. Keep going!</p>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        
+
+        <!-- Real-Time Investment Graph Section -->
+        <div class="investment-graph-section container mt-4 p-4 bg-light rounded shadow">
+            <h3 class="text-center"><i class="fas fa-chart-line"></i> Investment Progress</h3>
+            <div class="chart-container">
+                <canvas id="investmentChart"></canvas>
+            </div>
+            <div id="investmentDetails" class="text-center mt-3">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Invested Amount:</strong> <span id="investedAmount" class="text-success">$0</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Accumulated Profit:</strong> <span id="profitAmount" class="text-primary">$0</span></p>
+                    </div>
+                </div>
+            </div>  </div>
+            
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const ctx = document.getElementById('investmentChart').getContext('2d');
+                let investmentChart;
+
+                // Initialize the chart
+                function initializeChart(initialInvestment = 0) {
+                    const ctx = document.getElementById('investmentChart').getContext('2d');
+                    investmentChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: Array(20).fill('').map((_, i) => `${i * 5}s`),
+                            datasets: [
+                                {
+                                    label: 'Investment Value (USD)',
+                                    data: Array(20).fill(initialInvestment),
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.4
+                                },
+                                {
+                                    label: 'Profit Accumulated (USD)',
+                                    data: Array(20).fill(0),
+                                    borderColor: 'rgba(255, 99, 132, 1)',
+                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.4
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true, // Ensure the chart is responsive
+                            maintainAspectRatio: false, // Allow the chart to adjust its aspect ratio
+                            plugins: {
+                                legend: { position: 'top' },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function (context) {
+                                            return `${context.dataset.label}: $${context.raw.toFixed(2)}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { title: { display: true, text: 'Time Progress' } },
+                                y: {
+                                    title: { display: true, text: 'Amount (USD)' },
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+                // Fetch and update investment data
+                async function updateInvestmentData() {
+                    try {
+                        const response = await fetch('/api/realtime_investment_data');
+                        const data = await response.json();
+
+                        if (!investmentChart) {
+                            initializeChart(data.initial_investment || 0);
+                        }
+
+                        if (data.error || data.investment_status !== 'active') {
+                            document.getElementById('investedAmount').textContent = '$0.00';
+                            document.getElementById('profitAmount').textContent = '$0.00';
+                            return;
+                        }
+
+                        // Update the chart data
+                        const timeProgress = data.time_progress / 100;
+                        const currentValue = data.initial_investment;
+                        const currentProfit = data.profit;
+
+                        // Shift all data points left and add new point at the end
+                        investmentChart.data.datasets[0].data.shift();
+                        investmentChart.data.datasets[0].data.push(currentValue);
+
+                        investmentChart.data.datasets[1].data.shift();
+                        investmentChart.data.datasets[1].data.push(currentProfit);
+
+                        investmentChart.update();
+
+                        // Update displayed information
+                        document.getElementById('investedAmount').textContent = `$${currentValue.toFixed(2)}`;
+                        document.getElementById('profitAmount').textContent = `$${currentProfit.toFixed(2)}`;
+
+                        const timeRemainingElement = document.getElementById('timeRemaining');
+                        if (timeRemainingElement) {
+                            timeRemainingElement.textContent =
+                                `Time remaining: ${data.hours_remaining}h ${data.minutes_remaining}m`;
+                        }
+
+                        // Update investment status text
+                        const statusElement = document.getElementById('currentInvestmentStatus');
+                        if (statusElement) {
+                            statusElement.textContent =
+                                `$${currentValue.toFixed(2)} invested (${data.time_progress.toFixed(1)}% complete)`;
+                        }
+                    } catch (error) {
+                        console.error('Error updating investment data:', error);
+                    }
+                }
+
+                // Initialize and start updates
+                initializeChart();
+                updateInvestmentData();
+                setInterval(updateInvestmentData, 5000); // Update every 5 seconds
+            });
+        </script>
+        <!-- Investment Section -->
+        <div class="investment-section container mt-4 p-4 bg-light rounded shadow">
+            <h3 class="text-center text-primary"><i class="fas fa-wallet"></i> Your Investment in Progress</h3>
+            <p class="text-center mt-2">
+                <i class="fas fa-coins text-warning"></i>
+                <strong class="text-success" id="currentInvestmentStatus">
+                    {{ session.get('investment', 'No active investment') }}
+                </strong>
+            </p>
+            
+            <div class="d-flex justify-content-center mt-3">
+                <button class="btn btn-success me-3" onclick="window.location.href='/invest'">
+                    <i class="fas fa-plus-circle"></i> Invest Now
+                </button>
+                <button class="btn btn-danger" onclick="attemptWithdraw()">
+                    <i class="fas fa-money-check-alt"></i> Withdraw
+                </button>
+            </div> 
+            <script>
+                // Function to update the investment status text
+                async function updateInvestmentData() {
+                        try {
+                            console.log("Fetching real-time investment data...");
+                            const response = await fetch('/api/realtime_investment_data');
+                            const data = await response.json();
+                            console.log("Data fetched:", data);
+
+                            if (!investmentChart) {
+                                console.log("Initializing chart...");
+                                initializeChart(data.initial_investment || 0);
+                            }
+
+                            if (data.error || data.investment_status !== 'active') {
+                                document.getElementById('investedAmount').textContent = '$0.00';
+                                document.getElementById('profitAmount').textContent = '$0.00';
+                                return;
+                            }
+
+                            // Update chart data
+                            investmentChart.data.datasets[0].data.shift();
+                            investmentChart.data.datasets[0].data.push(data.current_value);
+
+                            investmentChart.data.datasets[1].data.shift();
+                            investmentChart.data.datasets[1].data.push(data.profit);
+
+                            investmentChart.update();
+
+                            // Update DOM elements
+                            document.getElementById('investedAmount').textContent = `$${data.current_value.toFixed(2)}`;
+                            document.getElementById('profitAmount').textContent = `$${data.profit.toFixed(2)}`;
+                            document.getElementById('timeRemaining').textContent =
+                                `Time remaining: ${data.hours_remaining}h ${data.minutes_remaining}m`;
+                            document.getElementById('currentInvestmentStatus').textContent =
+                                `$${data.current_value.toFixed(2)} invested (${data.time_progress.toFixed(1)}% complete)`;
+                        } catch (error) {
+                            console.error("Error updating investment data:", error);
+                        }
+                    }
+               </script>
+        
+            <!-- Withdrawal Modal -->
+            <div class="modal fade" id="withdrawalModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title"><i class="fas fa-money-check-alt"></i> Withdrawal Status</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="withdrawalModalBody" style="max-height: 70vh; overflow-y: auto;">
+                            <!-- Content will be dynamically inserted -->
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" id="proceedWithdrawalBtn" style="display:none;">
+                                Proceed to Payment
+                            </button>
+                            <button type="button" class="btn btn-success" id="iHavePaidBtn" style="display:none;">
+                                I Have Paid
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                #withdrawalModal .modal-body {
+                    padding: 20px;
+                }
+            
+                #withdrawalModal .payment-instructions {
+                    text-align: left;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 5px;
+                    margin-bottom: 15px;
+                }
+            
+                #withdrawalModal .payment-instructions b {
+                    color: #0d6efd;
+                }
+            
+                #withdrawalModal .step {
+                    margin-bottom: 8px;
+                }
+            </style>
+            <script>
+                async function attemptWithdraw() {
+                    const modal = new bootstrap.Modal(document.getElementById('withdrawalModal'));
+                    const modalBody = document.getElementById('withdrawalModalBody');
+                    const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+                    const iHavePaidBtn = document.getElementById('iHavePaidBtn');
+
+                    // Reset buttons
+                    proceedBtn.style.display = 'none';
+                    iHavePaidBtn.style.display = 'none';
+                    proceedBtn.disabled = false;
+                    proceedBtn.innerHTML = 'Proceed to Payment';
+
+                    try {
+                        modalBody.innerHTML = `
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border text-primary mb-3" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <h5 class="mt-3">Checking withdrawal eligibility...</h5>
+                                        </div>`;
+                        modal.show();
+
+                        const response = await fetch("/check_withdrawal", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" }
+                        });
+                        const result = await response.json();
+
+                        if (result.error) {
+                            modalBody.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+                            return;
+                        }
+
+                        if (!result.can_withdraw) {
+                            modalBody.innerHTML = `<div class="alert alert-warning">${result.message}</div>`;
+                            return;
+                        }
+
+                        // Save values for use in manual payment notice
+                        const requiredUsd = result.required_payment || 0;
+
+                        modalBody.innerHTML = `
+                                        <div class="text-center">
+                                            <h4 class="text-success">Withdrawal Available!</h4>
+                                            <p>To withdraw your profits, you need to pay a clause fee.</p>
+                                            <p><strong>Amount to Pay:</strong> $${requiredUsd.toFixed(2)}</p>
+                                        </div>`;
+                        proceedBtn.style.display = 'inline-block';
+
+                        proceedBtn.onclick = () => {
+                            modalBody.innerHTML = `
+                                            <div class="text-center">
+                                                <h4 class="text-success mb-4">Select Your Country</h4>
+                                                <select id="countrySelect" class="form-select mb-4" style="max-width:300px; margin:auto;">
+                                                    <option value="">-- Select Country --</option>
+                                                    <option value="Kenya">Kenya</option>
+                                                    <option value="Uganda">Uganda</option>
+                                                    <option value="Rwanda">Rwanda</option>
+                                                    <option value="South Sudan">South Sudan</option>
+                                                    <option value="Tanzania">Tanzania</option>
+                                                    <option value="Zambia">Zambia</option>
+                                                </select>
+                                                <div id="countryPaymentInstructions" class="mt-3"></div>
+                                            </div>`;
+                            proceedBtn.style.display = 'none';
+                            iHavePaidBtn.style.display = 'none';
+
+                            document.getElementById('countrySelect').onchange = async function () {
+                                const country = this.value;
+                                let html = "";
+                                proceedBtn.style.display = 'none';
+                                iHavePaidBtn.style.display = 'none';
+
+                                if (!country) return;
+
+                                if (country === "Kenya") {
+                                    html = `<div class="alert alert-success">You will proceed to secure payment via Paystack.</div>`;
+                                    proceedBtn.style.display = 'inline-block';
+                                    proceedBtn.textContent = 'Proceed to Paystack';
+
+                                    proceedBtn.onclick = async () => {
+                                        proceedBtn.disabled = true;
+                                        proceedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+
+                                        const paymentResponse = await fetch("/process_withdrawal", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ country: "Kenya" })
+                                        });
+                                        const paymentData = await paymentResponse.json();
+
+                                        if (paymentData.status) {
+                                            window.location.href = paymentData.data.authorization_url;
+                                        } else {
+                                            modalBody.innerHTML += `<div class="alert alert-danger mt-3">${paymentData.message}</div>`;
+                                            proceedBtn.disabled = false;
+                                            proceedBtn.innerHTML = 'Try Again';
+                                        }
+                                    };
+                                } else {
+                                    // Manual payment (non-Kenya)
+                                    iHavePaidBtn.style.display = 'inline-block';
+
+                                    // Get local amount and conversion rate
+                                    let localAmount = requiredUsd;
+                                    let rate = 1;
+                                    let toCurrency = "KES";
+                                    switch (country) {
+                                        case "Uganda": toCurrency = "UGX"; break;
+                                        case "Rwanda": toCurrency = "RWF"; break;
+                                        case "Tanzania": toCurrency = "TZS"; break;
+                                        case "Zambia": toCurrency = "ZMW"; break;
+                                        case "South Sudan": toCurrency = "SSP"; break;
+                                    }
+                                    try {
+                                        const convResp = await fetch(`/convert_currency?amount=${requiredUsd}&from=USD&to=${toCurrency}`);
+                                        const convData = await convResp.json();
+                                        if (convData.converted) localAmount = convData.converted;
+                                        if (convData.rate) rate = convData.rate;
+                                    } catch (e) { }
+
+                                    // Add transaction ID input field and per-country instructions
+                                    let instructions = '';
+                                    if (country === "Uganda") {
+                                        instructions = `
+                                                        <div class="payment-instructions">
+                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MTN UGANDA</h5>
+                                                            <div class="step">1. Dial <b>*165*1#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. East Africa</div>
+                                                            <div class="step">4. Safaricom(mpesa)KENYA</div>
+                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
+                                                            <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> AIRTEL UGANDA</h5>
+                                                            <div class="step">1. Dial <b>*185*1#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. International transfer</div>
+                                                            <div class="step">4. Eastern Africa</div>
+                                                            <div class="step">5. Kenya</div>
+                                                            <div class="step">6. Safaricom(mpesa)</div>
+                                                            <div class="step">7. Enter <b>254769823817</b> as the receiver number</div>
+                                                            <div class="step">8. Reason: Any</div>
+                                                        </div>`;
+                                    } else if (country === "Rwanda") {
+                                        instructions = `
+                                                        <div class="payment-instructions">
+                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MTN RWANDA</h5>
+                                                            <div class="step">1. Dial <b>*182#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. International transfer</div>
+                                                            <div class="step">4. Safaricom(mpesa)KENYA</div>
+                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
+                                                            <div class="text-center my-3"><b>OR</b></div>
+                                                            <div class="step">1. Dial <b>*830#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. International transfer</div>
+                                                            <div class="step">4. Safaricom(mpesa)KENYA</div>
+                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
+                                                        </div>`;
+                                    } else if (country === "Tanzania") {
+                                        instructions = `
+                                                        <div class="payment-instructions">
+                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MPESA TANZANIA</h5>
+                                                            <div class="step">1. Dial <b>*150*00#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. Select Mpesa kenya</div>
+                                                            <div class="step">4. Enter number <b>+254769823817</b></div>
+                                                            <div class="step">5. Enter amount and then pin</div>
+                                                            <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> AIRTEL TANZANIA</h5>
+                                                            <div class="step">1. Dial <b>*150*60#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. Choose international transfer</div>
+                                                            <div class="step">4. Select kenya</div>
+                                                            <div class="step">5. Enter <b>+254769823817</b></div>
+                                                            <div class="step">6. Enter amount and then pin</div>
+                                                            <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> TIGO TANZANIA</h5>
+                                                            <div class="step">1. Dial <b>*150*01#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. Select send out of the country</div>
+                                                            <div class="step">4. Select kenya</div>
+                                                            <div class="step">5. Enter <b>254769823817</b></div>
+                                                            <div class="step">6. Enter amount and then pin</div>
+                                                        </div>`;
+                                    } else if (country === "Zambia") {
+                                        instructions = `
+                                                        <div class="payment-instructions">
+                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> AIRTEL ZAMBIA</h5>
+                                                            <div class="step">1. Dial <b>*115#</b></div>
+                                                            <div class="step">2. Select send money</div>
+                                                            <div class="step">3. Choose international transfer</div>
+                                                            <div class="step">4. Select kenya</div>
+                                                            <div class="step">5. Enter <b>254769823817</b></div>
+                                                            <div class="step">6. Enter amount and then pin</div>
+                                                        </div>`;
+                                    } else if (country === "South Sudan") {
+                                        instructions = `
+                                                        <div class="payment-instructions">
+                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> M-Gurush SOUTH SUDAN</h5>
+                                                            <div class="step">1. Dial <b>*355#</b></div>
+                                                            <div class="step">2. Enter your m-Gurush pin</div>
+                                                            <div class="step">3. Select send money</div>
+                                                            <div class="step">4. Select Kenya</div>
+                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver</div>
+                                                            <div class="step">6. Confirm and send</div>
+                                                        </div>`;
+                                    }
+
+                                    html = `
+                                                    <div class="mb-3">
+                                                        <label for="withdrawalTransactionIdInput" class="form-label"><b>Transaction/Reference ID:</b></label>
+                                                        <input type="text" class="form-control" id="withdrawalTransactionIdInput" placeholder="Enter your payment transaction/reference ID">
+                                                    </div>
+                                                    <h6>Pay <b>${localAmount} ${toCurrency}</b> (${requiredUsd} USD)</h6>
+                                                    <div>Conversion Rate: 1 USD = ${rate} ${toCurrency}</div>
+                                                    ${instructions}
+                                                    <hr>
+                                                    <div class="alert alert-info">After payment, enter your Transaction/Reference ID above and click <b>I Have Paid</b>. Your withdrawal will be pending approval.</div>
+                                                `;
+
+                                    document.getElementById("countryPaymentInstructions").innerHTML = html;
+
+                                    // Handle "I Have Paid" click
+                                    iHavePaidBtn.onclick = async function () {
+                                        const transactionId = document.getElementById('withdrawalTransactionIdInput').value.trim();
+                                        if (!transactionId) {
+                                            alert('Please enter your payment transaction/reference ID.');
+                                            return;
+                                        }
+                                        try {
+                                            const res = await fetch('/manual_payment_notice', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    amount_usd: requiredUsd,
+                                                    local_amount: localAmount,
+                                                    plan: "withdrawal", // or pass actual plan if you store it
+                                                    country: country,
+                                                    transaction_id: transactionId,
+                                                    withdrawal: true // optional: mark as withdrawal
+                                                })
+                                            });
+                                            const data = await res.json();
+                                            if (data.status === 'pending') {
+                                                modal.hide();
+                                                alert('Your withdrawal is pending approval. You will be notified once it is confirmed.');
+                                                window.location.href = '/dashboard';
+                                            } else {
+                                                alert('Failed to submit withdrawal notice: ' + (data.message || 'Try again.'));
+                                            }
+                                        } catch (err) {
+                                            alert('Network error. Please try again.');
+                                        }
+                                    };
+                                }
+                            };
+                        };
+                    } catch (err) {
+                        modalBody.innerHTML = `<div class="alert alert-danger">An error occurred. Please try again.</div>`;
+                    }
+                }
+                   </script>
+           
+        </div>
+
+        <!-- Telegram Help Icon -->
+        <a href="https://t.me/bigwinnersltd"
+            class="help-icon btn btn-primary rounded-circle shadow d-flex justify-content-center align-items-center"
+            title="Need help? Chat with us on Telegram!" target="_blank">
+            <i class="fab fa-telegram-plane"></i>
+        </a>
+
+        <!-- Menu Icon -->
+        <div class="menu-container">
+            <i class="fas fa-bars menu-icon" onclick="toggleMenu()"></i>
+            <div class="menu-dropdown" id="menuDropdown">
+                <!-- Home Section -->
+                <div class="menu-item">
+                    <a href="/dashboard"><i class="fas fa-home"></i> <span>Home</span></a>
+                </div>
+
+                <!-- Profile Section -->
+                <div class="menu-item profile-section">
+                    <a href="javascript:void(0);" onclick="toggleProfileDetails()">
+                        <i class="fas fa-user-circle"></i> <span>Profile</span>
+                    </a>
+                </div>
+                <div class="profile-details" id="profileDetails">
+                    <!-- Profile Picture or Initials -->
+                    <div class="profile-picture-container" id="profilePictureContainer">
+                        <img id="profilePicture"
+                            src="{{ url_for('static', filename='uploads/' + session.get('profile_picture', 'default.jpg')) }}"
+                            alt="Profile Picture">
+                    </div>
+                    <p><i class="fas fa-user"></i> <strong>Username:</strong> {{ session.get('user', 'Guest') }}</p>
+                    <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not
+                        available') }}</p>
+                </div>
+
+                <h3><i class="fas fa-file-contract"></i> Subscription Plans</h3>
+                <ul>
+                    
+                    <li><i class="fas fa-check"></i> <a href="/invest">Standard Plan</a></li>
+                    <li><i class="fas fa-check"></i> <a href="/invest">VIP Plan</a></li>
+                </ul>
+                <h3><i class="fas fa-list"></i> More Options</h3>
+                <ul>
+                    <li>
+                        <a href="/account-settings">
+                            <i class="fas fa-cog"></i> <span>Account Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/about">
+                            <i class="fas fa-info-circle"></i> <span>About Us</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('terms') }}">
+                            <i class="fas fa-file-alt"></i> <span>Terms & Conditions</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/logout">
+                            <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            </script>
+        </div>
+       
+        <div class="currency-converter container mt-4 p-4 bg-light rounded shadow">
+            <h3 class="text-center text-primary"><i class="fas fa-exchange-alt"></i> Big Winners Currency Converter</h3>
+            <div class="row mt-3 align-items-center">
+                <div class="col-md-4 mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-primary text-white"><i class="fas fa-dollar-sign"></i></span>
+                        <input type="number" id="convertAmount" class="form-control" placeholder="Enter Amount">
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <select id="fromCurrency" class="form-select">
+                        <option value="USD">US Dollar (USD) - United States</option>
+                        <option value="KES">Kenyan Shilling (KES) - Kenya</option>
+                        <option value="EUR">Euro (EUR) - Eurozone</option>
+                        <option value="GBP">British Pound (GBP) - United Kingdom</option>
+                        <option value="UGX">Ugandan Shilling (UGX) - Uganda</option>
+                        <option value="RWF">Rwandan Franc (RWF) - Rwanda</option>
+                        <option value="SSP">South Sudanese Pound (SSP) - South Sudan</option>
+                        <option value="TZS">Tanzanian Shilling (TZS) - Tanzania</option>
+                        <option value="ZMW">Zambian Kwacha (ZMW) - Zambia</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <select id="toCurrency" class="form-select">
+                        <option value="USD">US Dollar (USD) - United States</option>
+                        <option value="KES">Kenyan Shilling (KES) - Kenya</option>
+                        <option value="EUR">Euro (EUR) - Eurozone</option>
+                        <option value="GBP">British Pound (GBP) - United Kingdom</option>
+                        <option value="UGX">Ugandan Shilling (UGX) - Uganda</option>
+                        <option value="RWF">Rwandan Franc (RWF) - Rwanda</option>
+                        <option value="SSP">South Sudanese Pound (SSP) - South Sudan</option>
+                        <option value="TZS">Tanzanian Shilling (TZS) - Tanzania</option>
+                        <option value="ZMW">Zambian Kwacha (ZMW) - Zambia</option>
+                    </select>
+                </div>
+                <div class="col-md-2 mb-3">
+                    <button class="btn btn-primary w-100" onclick="convertCurrency()">
+                        <i class="fas fa-calculator"></i> Convert
+                    </button>
+                </div>
+            </div>
+            <p id="conversionResult" class="mt-3 text-center text-success"><i class="fas fa-sync-alt"></i> Live Conversion Rate:
+            
+        </div>
+
+<!-- Testimonials Section -->
+<div class="testimonials-section container mt-4 p-4 bg-light rounded shadow">
+    <h3 class="text-center text-primary"><i class="fas fa-star"></i> User Testimonials</h3>
+    
+    <!-- Review Submission Form -->
+    <div class="review-form mb-4">
+        <h5 class="mb-3">Share Your Experience</h5>
+        <form id="reviewForm">
+            <div class="mb-3">
+                <label class="form-label">Rating:</label>
+                <div class="rating-stars">
+                    <input type="radio" id="star5" name="rating" value="5">
+                    <label for="star5" title="5 stars">★</label>
+                    <input type="radio" id="star4" name="rating" value="4">
+                    <label for="star4" title="4 stars">★</label>
+                    <input type="radio" id="star3" name="rating" value="3">
+                    <label for="star3" title="3 stars">★</label>
+                    <input type="radio" id="star2" name="rating" value="2">
+                    <label for="star2" title="2 stars">★</label>
+                    <input type="radio" id="star1" name="rating" value="1">
+                    <label for="star1" title="1 star">★</label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <textarea class="form-control" id="reviewText" rows="3" 
+                          placeholder="Share your experience with Big Winners..." 
+                          maxlength="500"></textarea>
+                
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i> Submit Review
+            </button>
+        </form>
+    </div>
+
+
+
+    <!-- Approved Reviews Display -->
+    <div class="approved-reviews">
+        <h5 class="mb-3">What Our Users Say</h5>
+        <div id="reviewsContainer" class="row">
+            <!-- Reviews will be loaded here dynamically -->
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Rating Stars Styling */
+    .rating-stars {
+        display: inline-block;
+        font-size: 0;
+    }
+    
+    .rating-stars input {
+        display: none;
+    }
+    
+    .rating-stars label {
+        font-size: 24px;
+        color: #ddd;
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+    
+    .rating-stars input:checked ~ label,
+    .rating-stars label:hover,
+    .rating-stars label:hover ~ label {
+        color: #ffc107;
+    }
+    
+    .rating-stars input:checked + label {
+        color: #ffc107;
+    }
+    
+    /* Review Cards Styling */
+    .review-card {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        border-left: 4px solid #007bff;
+    }
+    
+    .review-header {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .review-user {
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .review-rating {
+        color: #ffc107;
+    }
+    
+    .review-text {
+        color: #555;
+        line-height: 1.5;
+    }
+    
+    .review-date {
+        font-size: 0.8em;
+        color: #888;
+        text-align: right;
+    }
+</style>
+
+<script>
+    // Load approved reviews
+    async function loadReviews() {
+        try {
+            const response = await fetch('/get_approved_reviews');
+            const data = await response.json();
+            displayReviews(data.reviews);
+        } catch (error) {
+            console.error('Error loading reviews:', error);
+        }
+    }
+
+    // Display reviews in the container
+    function displayReviews(reviews) {
+        const container = document.getElementById('reviewsContainer');
+        
+        if (!reviews || reviews.length === 0) {
+            container.innerHTML = `
+                <div class="col-12 text-center">
+                    <p class="text-muted">No reviews yet. Be the first to share your experience!</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = reviews.map(review => `
+            <div class="col-md-6 col-lg-4">
+                <div class="review-card">
+                    <div class="review-header">
+                        <span class="review-user">${review.username}</span>
+                        <span class="review-rating">${'★'.repeat(review.rating)}${'☆'.repeat(5-review.rating)}</span>
+                    </div>
+                    <div class="review-text">${review.review_text}</div>
+                    <div class="review-date">${review.created_at || ''}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Handle review form submission
+    document.getElementById('reviewForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const rating = document.querySelector('input[name="rating"]:checked');
+        const reviewText = document.getElementById('reviewText').value.trim();
+        
+        if (!rating || !reviewText) {
+            return; // No flash message as requested
+        }
+
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        // Show loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+        try {
+            const response = await fetch('/submit_review', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    rating: parseInt(rating.value),
+                    review_text: reviewText
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // Reset form without showing flash message
+                this.reset();
+                // Optionally reload reviews
+                loadReviews();
+            }
+            // No flash message shown regardless of success/error as requested
+            
+        } catch (error) {
+            console.error('Error submitting review:', error);
+            // No flash message as requested
+        } finally {
+            // Reset button state
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+
+    // Load reviews when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadReviews();
+    });
+</script>
+        
+        <script>
+            async function convertCurrency() {
+                const amount = document.getElementById("convertAmount").value;
+                const fromCurrency = document.getElementById("fromCurrency").value;
+                const toCurrency = document.getElementById("toCurrency").value;
+                const conversionResult = document.getElementById("conversionResult");
+
+                if (!amount || amount <= 0) {
+                    conversionResult.textContent = "Please enter a valid amount.";
+                    return;
+                }
+
+                try {
+                    conversionResult.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Fetching conversion rate...';
+
+                    const response = await fetch(`/convert_currency?amount=${amount}&from=${fromCurrency}&to=${toCurrency}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        conversionResult.textContent = data.error;
+                    } else {
+                        conversionResult.innerHTML = `
+                                    <strong>${amount} ${fromCurrency}</strong> = 
+                                    <strong>${data.converted} ${toCurrency}</strong> 
+                                    <br> Conversion Rate: 1 ${fromCurrency} = ${data.rate} ${toCurrency}
+                                `;
+                    }
+                } catch (error) {
+                    conversionResult.textContent = "Error fetching conversion rate. Please try again.";
+                }
+            }
+        </script>
+
+        <div class="quick-links">
+            <h3><i class="fas fa-link"></i> Quick Links</h3>
+            <ul>
+                <li><a href="/about">About Us</a></li>
+                <li><a href="/contact">Contact Us</a></li>
+                <li><a href="/terms">Terms of Service</a></li>
+                <li><a href="/privacy">Privacy and Policy</a></li>
+            </ul>
+        </div>
+        <!-- JavaScript -->
+        <script>
+            function toggleMenu() {
+                let menu = document.getElementById("menuDropdown");
+                menu.style.display = menu.style.display === "block" ? "none" : "block";
+            }
+
+            function toggleProfileDetails() {
+                let details = document.getElementById("profileDetails");
+                details.style.display = details.style.display === "block" ? "none" : "block";
+            }
+
+            // Handle Profile Picture Fallback
+            window.onload = function () {
+                const profilePicture = document.getElementById("profilePicture");
+                const profilePictureContainer = document.getElementById("profilePictureContainer");
+                const email = "{{ session.get('user_email', '') }}";
+                const initial = email.charAt(0).toUpperCase();
+
+                profilePicture.onerror = function () {
+                    profilePicture.style.display = "none";
+                    const fallbackIcon = document.createElement("div");
+                    fallbackIcon.className = "profile-initial";
+                    fallbackIcon.textContent = initial;
+                    profilePictureContainer.appendChild(fallbackIcon);
+                };
+
+                if (profilePicture.getAttribute("src").includes("default.jpg")) {
+                    profilePicture.onerror(); // Trigger fallback if it's the default image
+                }
+            };
+        </script>
+        <!-- Withdrawal Modal -->
+        <div class="modal fade" id="withdrawalModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Withdrawal Status</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="withdrawalModalBody">
+                        <!-- Content will be inserted here by JavaScript -->
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="proceedWithdrawalBtn" style="display:none;">Proceed to
+                            Payment</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+           // Fetch and update investment data dynamically
+            document.addEventListener('DOMContentLoaded', function () {
+                fetchInvestmentData();
+
+                // Optionally refresh investment data periodically
+                setInterval(fetchInvestmentData, 30000); // Refresh every 30 seconds
+            });
+
+            let lastFetchedData = null; // Cache the last fetched data to avoid redundant updates
+
+            async function fetchInvestmentData() {
+                try {
+                    console.log("Fetching investment data...");
+                    const response = await fetch('/api/investment_details');
+
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    console.log("Data fetched:", data);
+
+                    if (data.error) {
+                        console.error("API returned an error:", data.error);
+                        updateInvestmentSection('Error fetching investment data');
+                        updateWelcomeBanner('Error fetching investment data');
+                        return;
+                    }
+
+                    // Avoid redundant updates if data hasn't changed
+                    if (JSON.stringify(data) === JSON.stringify(lastFetchedData)) {
+                        console.log("No changes in data. Skipping update.");
+                        return;
+                    }
+                    lastFetchedData = data; // Cache the latest data
+
+                    // Update the investment section dynamically
+                    updateInvestmentSection(
+                        data.amount_invested > 0
+                            ? `$${data.amount_invested.toFixed(2)} invested`
+                            : 'No active investment'
+                    );
+
+                    // Update the welcome banner dynamically
+                    updateWelcomeBanner(
+                        data.amount_invested > 0
+                            ? `You have invested $${data.amount_invested.toFixed(2)} so far. Keep going!`
+                            : 'You have invested $0 so far. Keep going!'
+                    );
+                } catch (error) {
+                    console.error("Error fetching investment data:", error);
+                    updateInvestmentSection('Error fetching investment data');
+                    updateWelcomeBanner('Error fetching investment data');
+                }
+            }
+
+            function updateInvestmentSection(text) {
+                const investmentElement = document.querySelector('.investment-section p strong');
+                if (investmentElement) {
+                    investmentElement.textContent = text;
+                }
+            }
+
+            function updateWelcomeBanner(text) {
+                const welcomeBanner = document.querySelector('.welcome-banner p');
+                if (welcomeBanner) {
+                    welcomeBanner.textContent = text;
+                }
+            }
+            
+        </script>
+        
+        
+</body>
+<footer>
+    <p>&copy; 2025 Big Winners. All rights reserved.</p>
+</footer>
+</html>

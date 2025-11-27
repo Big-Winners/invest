@@ -1,0 +1,201 @@
+/* General Styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', Arial, sans-serif;
+    background: #f4f8fb;
+    color: #333;
+    font-size: 14px;
+    /* Reduced base font size */
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Left Section */
+.left-section {
+    background: linear-gradient(to bottom right, #007bff, #0056b3);
+    min-height: 100vh;
+    padding: 30px;
+    position: relative;
+    clip-path: polygon(0 0, 100% 0, 80% 100%, 0% 100%);
+}
+
+.left-section h2 {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.left-section p {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.left-section .btn-light {
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+/* Right Section */
+.right-section {
+    min-height: 100vh;
+    padding: 20px;
+    /* Reduced padding */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(to bottom right, #ffffff, #e6f7ff);
+}
+
+.form-container {
+    width: 100%;
+    max-width: 500px;
+    /* Reduced max width */
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    /* Reduced padding */
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+.form-container h3 {
+    color: #007bff;
+    font-weight: 600;
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+    /* Reduced size */
+    text-align: center;
+}
+
+.input-group {
+    position: relative;
+    margin-bottom: 1.2rem;
+}
+
+.input-group span.input-group-text {
+    background: #e9f3ff;
+    border: none;
+    border-radius: 8px 0 0 8px;
+    font-size: 1rem;
+    /* Reduced size */
+    color: #007bff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+input.form-control,
+select.form-select {
+    border-radius: 0 8px 8px 0;
+    padding: 10px;
+    /* Reduced padding */
+    font-size: 0.9rem;
+    /* Reduced size */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+input.form-control:focus,
+select.form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 6px rgba(0, 123, 255, 0.4);
+}
+
+/* Show/Hide Password Button */
+.input-group button {
+    border-radius: 0 8px 8px 0;
+    border: none;
+    background: #e9f3ff;
+    color: #007bff;
+    font-size: 1rem;
+    /* Reduced size */
+    padding: 0 10px;
+    transition: background 0.3s ease-in-out;
+}
+
+.input-group button:hover {
+    background: #d0e7ff;
+}
+
+/* Submit Button */
+button.btn-primary {
+    background: linear-gradient(to right, #007bff, #0056b3);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    /* Reduced padding */
+    font-size: 0.9rem;
+    /* Reduced size */
+    font-weight: 500;
+    color: white;
+    display: block;
+    width: 100%;
+    transition: background 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+button.btn-primary:hover {
+    background: linear-gradient(to right, #0056b3, #003f8a);
+    transform: translateY(-3px);
+}
+
+/* Gender Radio Buttons */
+.form-check-inline {
+    margin-right: 10px;
+    /* Reduced margin */
+}
+
+.form-check-label {
+    font-weight: 500;
+    color: #555;
+    font-size: 0.85rem;
+    /* Reduced size */
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 10px;
+    background: #f8f9fa;
+    font-size: 12px;
+    /* Reduced size */
+    color: #555;
+    margin-top: auto;
+    width: 100%;
+    border-top: 1px solid #ddd;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    h2 {
+        font-size: 1.8rem;
+    }
+
+    h3 {
+        font-size: 1.3rem;
+    }
+
+    p,
+    ul li {
+        font-size: 0.85rem;
+        /* Reduced size */
+    }
+
+    footer {
+        font-size: 0.75rem;
+        /* Reduced size */
+        padding: 8px;
+    }
+
+    .left-section {
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 0% 100%);
+    }
+}

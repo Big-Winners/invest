@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Manage your account settings, update profile picture, and change password.">
+    <meta name="keywords" content="Account Settings, Profile, Password Change">
+    <meta name="author" content="Big Winners">
+    <title>Account Settings</title>
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='account_settings.css') }}">
+</head>
+
+<body>
+    <!-- Account Settings Container -->
+    <div class="container mt-5">
+        <div class="card shadow-lg">
+            <div class="card-body">
+                <h2 class="text-center mb-4"><i class="fas fa-user-cog"></i> Account Settings</h2>
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="mb-3">
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <!-- User Information Section -->
+                <div class="mb-4 text-center">
+                    {% if session.profile_picture == "default.jpg" %}
+                    <div class="profile-icon rounded-circle d-flex justify-content-center align-items-center">
+                        {{ session.user[0] }}
+                    </div>
+                    {% else %}
+                    <img src="{{ url_for('static', filename='uploads/' + session.profile_picture) }}"
+                        alt="Profile Picture" class="profile-picture rounded-circle">
+                    {% endif %}
+
+                    <p><strong>Username:</strong> {{ session.user }}</p>
+                    <p><strong>Email:</strong> {{ session.user_email }}</p>
+                </div>
+
+                <!-- Profile Picture Management -->
+                <div class="mb-4">
+                    <h3 class="mb-3"><i class="fas fa-camera"></i> Profile Picture</h3>
+                    <form id="profileForm" action="/upload-profile-picture" method="POST" enctype="multipart/form-data"
+                        class="mb-3">
+                        <input type="file" name="profile_pic" accept="image/*" class="form-control mb-2">
+                        <button type="submit" class="btn btn-primary w-100">Upload</button>
+                    </form>
+                    <form id="deleteProfileForm" action="/remove-profile-picture" method="POST">
+                        <button type="submit" class="btn btn-danger w-100">Delete Profile Picture</button>
+                    </form>
+                </div>
+
+                <!-- Change Password Section -->
+                <div>
+                    <h3 class="mb-3"><i class="fas fa-lock"></i> Change Password</h3>
+                    <form id="changePasswordForm" action="/change-password" method="POST">
+                        <!-- Old Password -->
+                        <div class="mb-3">
+                            <label for="old_password" class="form-label">Old Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                <input type="password" id="old_password" name="old_password" class="form-control"
+                                    placeholder="Enter old password" required>
+                            </div>
+                        </div>
+
+                        <!-- New Password -->
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">New Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                <input type="password" id="new_password" name="new_password" class="form-control"
+                                    placeholder="Enter new password" required>
+                                <button type="button" class="btn btn-outline-secondary" id="toggleNewPassword">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div class="mb-3">
+                            <label for="confirm_password" class="form-label">Confirm Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                <input type="password" id="confirm_password" name="confirm_password"
+                                    class="form-control" placeholder="Confirm new password" required>
+                                <button type="button" class="btn btn-outline-secondary" id="toggleConfirmPassword">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Change Password</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+<!-- Menu Icon -->
+<div class="menu-container">
+    <i class="fas fa-bars menu-icon" onclick="toggleMenu()"></i>
+    <div class="menu-dropdown" id="menuDropdown">
+        <!-- Home Section -->
+        <div class="menu-item">
+            <a href="/dashboard"><i class="fas fa-home"></i> <span>Home</span></a>
+        </div>
+
+        <!-- Profile Section -->
+        <div class="menu-item profile-section">
+            <a href="javascript:void(0);" onclick="toggleProfileDetails()">
+                <i class="fas fa-user-circle"></i> <span>Profile</span>
+            </a>
+        </div>
+        <div class="profile-details" id="profileDetails">
+            <!-- Profile Picture or Initials -->
+            <div class="profile-picture-container" id="profilePictureContainer">
+                <img id="profilePicture"
+                    src="{{ url_for('static', filename='uploads/' + session.get('profile_picture', 'default.jpg')) }}"
+                    alt="Profile Picture">
+            </div>
+            <p><i class="fas fa-user"></i> <strong>Username:</strong> {{ session.get('user', 'Guest') }}</p>
+            <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not available')
+                }}</p>
+        </div>
+
+        <h3><i class="fas fa-file-contract"></i> Subscription Plans</h3>
+        <ul>
+            
+            <li><i class="fas fa-check"></i> <a href="/invest">Standard Plan</a></li>
+            <li><i class="fas fa-check"></i> <a href="/invest">VIP Plan</a></li>
+        </ul>
+        <h3><i class="fas fa-list"></i> More Options</h3>
+        <ul>
+            <li>
+                <a href="/account-settings">
+                    <i class="fas fa-cog"></i> <span>Account Settings</span>
+                </a>
+            </li>
+            <li>
+                <a href="/about">
+                    <i class="fas fa-info-circle"></i> <span>About Us</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('terms') }}">
+                    <i class="fas fa-file-alt"></i> <span>Terms & Conditions</span>
+                </a>
+            </li>
+            <li>
+                <a href="/logout">
+                    <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+<script>
+    function toggleMenu() {
+        const menuDropdown = document.getElementById('menuDropdown');
+        menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function toggleProfileDetails() {
+        const profileDetails = document.getElementById('profileDetails');
+        profileDetails.style.display = profileDetails.style.display === 'block' ? 'none' : 'block';
+    }
+</script>
+        <!-- Back to Dashboard -->
+        <div class="text-center mt-4">
+            <a href="/dashboard" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer text-center py-3 mt-4">
+        <p>&copy; 2025 Big Winners. All rights reserved.</p>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Password Visibility Toggle Script -->
+    <script>
+        const toggleNewPasswordButton = document.getElementById('toggleNewPassword');
+        const newPasswordInput = document.getElementById('new_password');
+        const newPasswordIcon = toggleNewPasswordButton.querySelector('i');
+
+        const toggleConfirmPasswordButton = document.getElementById('toggleConfirmPassword');
+        const confirmPasswordInput = document.getElementById('confirm_password');
+        const confirmPasswordIcon = toggleConfirmPasswordButton.querySelector('i');
+
+        toggleNewPasswordButton.addEventListener('click', () => {
+            const isPassword = newPasswordInput.getAttribute('type') === 'password';
+            newPasswordInput.setAttribute('type', isPassword ? 'text' : 'password');
+            newPasswordIcon.classList.toggle('fa-eye-slash', isPassword);
+            newPasswordIcon.classList.toggle('fa-eye', !isPassword);
+        });
+
+        toggleConfirmPasswordButton.addEventListener('click', () => {
+            const isPassword = confirmPasswordInput.getAttribute('type') === 'password';
+            confirmPasswordInput.setAttribute('type', isPassword ? 'text' : 'password');
+            confirmPasswordIcon.classList.toggle('fa-eye-slash', isPassword);
+            confirmPasswordIcon.classList.toggle('fa-eye', !isPassword);
+        });
+    </script>
+</body>
+
+</html>

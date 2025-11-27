@@ -1,0 +1,326 @@
+/* Account Settings Container */
+.settings-container {
+    width: 90%;
+    max-width: 800px;
+    margin: 30px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.settings-container h2 {
+    color: #007bff;
+    margin-bottom: 20px;
+}
+
+/* User Information */
+.user-info {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.profile-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: #007bff;
+    color: white;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 100px;
+    margin: 0 auto 10px;
+}
+
+.profile-picture {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    margin: 0 auto 10px;
+}
+
+.user-info p {
+    margin: 5px 0;
+    font-size: 16px;
+}
+
+/* Profile Picture Management */
+.profile-management {
+    margin: 20px 0;
+}
+
+.profile-management h3 {
+    margin-bottom: 10px;
+    color: #007bff;
+}
+
+.upload-btn,
+.delete-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.delete-btn {
+    background: #ff4757;
+}
+
+.upload-btn:hover,
+.delete-btn:hover {
+    opacity: 0.9;
+}
+
+/* Password Change */
+.password-change {
+    margin: 20px 0;
+}
+
+.password-change h3 {
+    margin-bottom: 10px;
+    color: #007bff;
+}
+
+.password-change input {
+    width: 100%;
+    padding: 8px;
+    margin: 8px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.change-password-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.change-password-btn:hover {
+    opacity: 0.9;
+}
+/* Flash Messages */
+.flash-messages {
+    margin-top: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.alert {
+    padding: 10px;
+    margin: 5px auto;
+    border-radius: 5px;
+    width: 90%;
+    max-width: 600px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.alert.success {
+    background-color: #28a745;
+    color: white;
+}
+
+.alert.error {
+    background-color: #dc3545;
+    color: white;
+}
+/* Menu Container and Button */
+.menu-container {
+    position: absolute;
+    top: 20px;
+    /* Set the distance from the top */
+    right: 20px;
+    /* Set the distance from the right */
+    z-index: 1000;
+    /* Ensure it appears above other elements */
+}
+
+.menu-icon {
+    font-size: 24px;
+    /* Icon size */
+    cursor: pointer;
+    color: #007bff;
+    /* Default blue color for the icon */
+    padding: 10px;
+    border-radius: 50%;
+    background: #f4f4f4;
+    /* Light background to make it visible */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* Add a soft shadow for depth */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.menu-icon:hover {
+    background: #007bff;
+    /* Highlight background on hover */
+    color: white;
+    /* Change icon color to white on hover */
+}
+
+/* Menu Dropdown */
+.menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 50px;
+    /* Position the dropdown below the menu button */
+    right: 0;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 250px;
+    text-align: left;
+    z-index: 1000;
+}
+
+/* Menu Items */
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* Space between icon and text */
+    margin-bottom: 20px;
+    /* Space between menu items */
+}
+
+.menu-item a {
+    text-decoration: none;
+    /* Remove underline from links */
+    font-size: 16px;
+    /* Font size for links */
+    color: #007bff;
+    /* Default blue color for links */
+    transition: color 0.3s ease;
+}
+
+.menu-item a:hover {
+    color: #0056b3;
+    /* Darker blue color on hover */
+    text-decoration: underline;
+    /* Underline the link on hover */
+}
+
+/* Icons in Menu Items */
+.menu-item i {
+    font-size: 18px;
+    /* Icon size */
+    color: #007bff;
+    /* Default blue color for icons */
+}
+
+/* Section Headings */
+.menu-dropdown h3 {
+    font-size: 14px;
+    color: #555;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* Subscription Plans Section */
+.menu-dropdown ul {
+    list-style: none;
+    /* Remove default list styling */
+    padding: 0;
+    margin: 0;
+}
+
+.menu-dropdown ul li {
+    margin-bottom: 10px;
+    /* Space between list items */
+    display: flex;
+    /* Use flexbox to align items horizontally */
+    align-items: center;
+    /* Vertically align the icon and text */
+    gap: 8px;
+    /* Add space between the tick icon and link */
+}
+
+.menu-dropdown ul li i {
+    color: #007bff;
+    /* Default blue color for the tick icon */
+    font-size: 16px;
+    /* Icon size */
+}
+
+.menu-dropdown ul li a {
+    text-decoration: none;
+    /* Remove underline from links */
+    font-size: 14px;
+    /* Font size for links */
+    color: #007bff;
+    /* Default blue color for links */
+    transition: color 0.3s ease;
+}
+
+.menu-dropdown ul li a:hover {
+    color: #0056b3;
+    /* Darker blue color on hover */
+    text-decoration: underline;
+    /* Underline the link on hover */
+}
+
+/* Logout Link */
+.logout-link {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ff4757;
+    /* Red color for logout link */
+}
+
+.logout-link:hover {
+    color: #e84141;
+    text-decoration: underline;
+}
+
+
+/* Profile Details */
+.profile-details {
+    display: none;
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: 10px;
+}
+
+.profile-details img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+
+}
+
+#profilePictureContainer {
+    background: blue;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 60px;
+}
+
+.profile-details p {
+    font-size: 14px;
+    margin: 5px 0;
+
+}

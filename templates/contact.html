@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='contact.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <h2>Contact Us</h2>
+        <p>If you have any questions, concerns, or feedback, feel free to reach out to us using the form below:</p>
+
+        <form action="mailto:winnersb27@gmail.com" method="post" enctype="text/plain">
+            <div>
+                <label for="name">Your Name:</label>
+                <input type="text" id="name" name="name" placeholder="Enter your name" required>
+            </div>
+            <div>
+                <label for="email">Your Email:</label>
+                <input type="email" id="email" name="email" placeholder="Enter your email" required>
+            </div>
+            <div>
+                <label for="message">Your Message:</label>
+                <textarea id="message" name="message" rows="5" placeholder="Enter your message here"
+                    required></textarea>
+            </div>
+            <div>
+                <button type="submit">Send Email</button>
+            </div>
+        </form>
+
+        <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+    </div>
+    <!-- Menu Icon -->
+    <div class="menu-container">
+        <i class="fas fa-bars menu-icon" onclick="toggleMenu()"></i>
+        <div class="menu-dropdown" id="menuDropdown">
+            <!-- Home Section -->
+            <div class="menu-item">
+                <a href="/dashboard"><i class="fas fa-home"></i> <span>Home</span></a>
+            </div>
+    
+            <!-- Profile Section -->
+            <div class="menu-item profile-section">
+                <a href="javascript:void(0);" onclick="toggleProfileDetails()">
+                    <i class="fas fa-user-circle"></i> <span>Profile</span>
+                </a>
+            </div>
+            <div class="profile-details" id="profileDetails">
+                <!-- Profile Picture or Initials -->
+                <div class="profile-picture-container" id="profilePictureContainer">
+                    <img id="profilePicture"
+                        src="{{ url_for('static', filename='uploads/' + session.get('profile_picture', 'default.jpg')) }}"
+                        alt="Profile Picture">
+                </div>
+                <p><i class="fas fa-user"></i> <strong>Username:</strong> {{ session.get('user', 'Guest') }}</p>
+                <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not
+                    available') }}</p>
+            </div>
+    
+            <h3><i class="fas fa-file-contract"></i> Subscription Plans</h3>
+            <ul>
+               
+                <li><i class="fas fa-check"></i> <a href="/invest">Standard Plan</a></li>
+                <li><i class="fas fa-check"></i> <a href="/invest">VIP Plan</a></li>
+            </ul>
+            <h3><i class="fas fa-list"></i> More Options</h3>
+            <ul>
+                <li>
+                    <a href="/account-settings">
+                        <i class="fas fa-cog"></i> <span>Account Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/about">
+                        <i class="fas fa-info-circle"></i> <span>About Us</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('terms') }}">
+                        <i class="fas fa-file-alt"></i> <span>Terms & Conditions</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/logout">
+                        <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <script>
+        function toggleMenu() {
+            const menuDropdown = document.getElementById('menuDropdown');
+            menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleProfileDetails() {
+            const profileDetails = document.getElementById('profileDetails');
+            profileDetails.style.display = profileDetails.style.display === 'block' ? 'none' : 'block';
+        }
+    </script>
+    
+
+
+</body>
+<footer>
+    <p>&copy; 2025 Big Winners. All rights reserved.</p>
+</footer>
+</html>

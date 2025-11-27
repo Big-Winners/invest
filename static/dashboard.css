@@ -1,0 +1,667 @@
+/* General Styling */
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f4f4;
+    margin: 0;
+    padding: 0;
+    color: #333;
+    text-align: center;
+}
+
+.container {
+    margin: 20px auto;
+    width: 90%;
+    max-width: 1200px;
+}
+
+/* Dashboard Title */
+h2 {
+    color: #007bff;
+    margin-bottom: 20px;
+    font-size: 28px;
+    text-align: center;
+}
+
+/* Welcome Banner */
+.welcome-banner {
+    width: 100%;
+    background-color: white;
+    color: black;
+    padding: 20px;
+    text-align: center;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.welcome-banner p {
+    margin: 10px 0 0;
+    font-size: 16px;
+}
+
+/* Investment Section */
+.investment-section {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+}
+
+.investment-section h3 {
+    color: #007bff;
+    margin-bottom: 15px;
+    font-size: 20px;
+}
+
+.investment-section p {
+    font-size: 16px;
+    margin: 10px 0;
+}
+
+.invest-now,
+.withdraw-button {
+    background-color: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.invest-now:hover {
+    background-color: #218838;
+}
+
+.withdraw-button:hover {
+    background-color: #dc3545;
+}
+
+.help-icon {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    font-size: 28px;
+    color: white;
+    text-decoration: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.help-icon:hover {
+    background-color: #0056b3;
+    /* Slightly darker blue for hover effect */
+    transform: scale(1.1);
+    /* Slightly enlarge the icon on hover */
+}
+/* Menu Container and Button */
+.menu-container {
+    position: absolute;
+    top: 20px;
+    /* Set the distance from the top */
+    right: 20px;
+    /* Set the distance from the right */
+    z-index: 1000;
+    /* Ensure it appears above other elements */
+}
+
+.menu-icon {
+    font-size: 24px;
+    /* Icon size */
+    cursor: pointer;
+    color: #007bff;
+    /* Default blue color for the icon */
+    padding: 10px;
+    border-radius: 50%;
+    background: #f4f4f4;
+    /* Light background to make it visible */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* Add a soft shadow for depth */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.menu-icon:hover {
+    background: #007bff;
+    /* Highlight background on hover */
+    color: white;
+    /* Change icon color to white on hover */
+}
+
+/* Menu Dropdown */
+.menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 50px;
+    /* Position the dropdown below the menu button */
+    right: 0;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 250px;
+    text-align: left;
+    z-index: 1000;
+}
+
+/* Menu Items */
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* Space between icon and text */
+    margin-bottom: 20px;
+    /* Space between menu items */
+}
+
+.menu-item a {
+    text-decoration: none;
+    /* Remove underline from links */
+    font-size: 16px;
+    /* Font size for links */
+    color: #007bff;
+    /* Default blue color for links */
+    transition: color 0.3s ease;
+}
+
+.menu-item a:hover {
+    color: #0056b3;
+    /* Darker blue color on hover */
+    text-decoration: underline;
+    /* Underline the link on hover */
+}
+
+/* Icons in Menu Items */
+.menu-item i {
+    font-size: 18px;
+    /* Icon size */
+    color: #007bff;
+    /* Default blue color for icons */
+}
+
+/* Section Headings */
+.menu-dropdown h3 {
+    font-size: 14px;
+    color: #555;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* Subscription Plans Section */
+.menu-dropdown ul {
+    list-style: none;
+    /* Remove default list styling */
+    padding: 0;
+    margin: 0;
+}
+
+.menu-dropdown ul li {
+    margin-bottom: 10px;
+    /* Space between list items */
+    display: flex;
+    /* Use flexbox to align items horizontally */
+    align-items: center;
+    /* Vertically align the icon and text */
+    gap: 8px;
+    /* Add space between the tick icon and link */
+}
+
+.menu-dropdown ul li i {
+    color: #007bff;
+    /* Default blue color for the tick icon */
+    font-size: 16px;
+    /* Icon size */
+}
+
+.menu-dropdown ul li a {
+    text-decoration: none;
+    /* Remove underline from links */
+    font-size: 14px;
+    /* Font size for links */
+    color: #007bff;
+    /* Default blue color for links */
+    transition: color 0.3s ease;
+}
+
+.menu-dropdown ul li a:hover {
+    color: #0056b3;
+    /* Darker blue color on hover */
+    text-decoration: underline;
+    /* Underline the link on hover */
+}
+/* Logout Link */
+.logout-link {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ff4757;
+    /* Red color for logout link */
+}
+
+.logout-link:hover {
+    color: #e84141;
+    text-decoration: underline;
+}
+
+
+/* Profile Details */
+.profile-details {
+    display: none;
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: 10px;
+}
+
+.profile-details img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    
+}
+#profilePictureContainer{
+    background: blue;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 60px;
+}
+
+.profile-details p {
+    font-size: 14px;
+    margin: 5px 0;
+    
+}
+
+/* Currency Converter */
+.currency-converter {
+    padding: 20px;
+    margin: 20px auto;
+    max-width: 600px;
+}
+
+.currency-converter table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+
+.currency-converter input,
+.currency-converter select {
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.currency-converter button {
+    background: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.currency-converter button:hover {
+    background: #0056b3;
+}
+
+#conversionResult {
+    font-size: 14px;
+    margin-top: 10px;
+    color: #333;
+}
+
+/* Quick Links Section */
+.quick-links {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.quick-links h3 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    color: #007bff;
+    font-weight: bold;
+}
+
+.quick-links ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.quick-links ul li {
+    margin: 10px 0;
+}
+
+.quick-links ul li a {
+    text-decoration: none;
+    font-size: 16px;
+    color: #ff0000;
+    transition: color 0.3s ease;
+}
+
+.quick-links ul li a:hover {
+    color: #007bff;
+}
+
+/* Footer */
+footer {
+    margin-top: 20px;
+    padding: 10px;
+    background: #f4f4f4;
+    text-align: center;
+    font-size: 14px;
+    color: #333;
+}
+
+/* Dark Mode */
+body.dark-mode {
+    background: #121212;
+    color: white;
+}
+
+body.dark-mode .welcome-banner,
+body.dark-mode .chart-container,
+body.dark-mode .investment-section,
+body.dark-mode .quick-links,
+body.dark-mode .footer {
+    background: #1e1e1e;
+    color: white;
+}
+
+body.dark-mode .help-icon {
+    background: #333;
+    color: white;
+}
+
+body.dark-mode .menu-dropdown {
+    background: #1e1e1e;
+    color: white;
+}
+/* Flash Messages Styling */
+.flash-messages {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.alert {
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 300px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease-out;
+}
+
+.alert-info {
+    background-color: #17a2b8;
+}
+
+.alert-error {
+    background-color: #dc3545;
+}
+
+.alert-success {
+    background-color: #28a745;
+}
+
+.close-btn {
+    cursor: pointer;
+    font-size: 1.5rem;
+    margin-left: 15px;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+/* ===== Withdrawal Modal Styling ===== */
+#withdrawalModal .modal-content {
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+}
+
+#withdrawalModal.show .modal-content {
+    transform: translateY(0);
+}
+
+#withdrawalModal .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom: none;
+    padding: 1.5rem;
+    position: relative;
+}
+
+#withdrawalModal .modal-header .btn-close {
+    filter: invert(1);
+    opacity: 0.8;
+}
+
+#withdrawalModal .modal-title {
+    font-weight: 600;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#withdrawalModal .modal-title i {
+    font-size: 1.6rem;
+}
+
+#withdrawalModal .modal-body {
+    padding: 2rem;
+    text-align: center;
+}
+
+#withdrawalModal .alert {
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    border: none;
+}
+
+#withdrawalModal .alert i {
+    margin-right: 8px;
+    font-size: 1.2rem;
+}
+
+#withdrawalModal .payment-details {
+    background: #f8f9ff;
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin: 1.5rem 0;
+    border-left: 4px solid #667eea;
+}
+
+#withdrawalModal .payment-details p {
+    margin: 0.5rem 0;
+    font-size: 1rem;
+}
+
+#withdrawalModal .payment-details strong {
+    color: #444;
+    font-weight: 600;
+}
+
+#withdrawalModal .modal-footer {
+    border-top: none;
+    padding: 0 2rem 2rem;
+    justify-content: center;
+    gap: 15px;
+}
+
+#withdrawalModal .btn {
+    padding: 0.7rem 1.8rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    min-width: 140px;
+}
+
+#withdrawalModal .btn-secondary {
+    background: #f1f3ff;
+    color: #667eea;
+    border: 1px solid #e0e4ff;
+}
+
+#withdrawalModal .btn-secondary:hover {
+    background: #e0e4ff;
+}
+
+#withdrawalModal #proceedWithdrawalBtn {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+}
+
+#withdrawalModal #proceedWithdrawalBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 172, 254, 0.4);
+}
+
+#withdrawalModal #proceedWithdrawalBtn:disabled {
+    background: #ccc;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.spinner-border {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.2em;
+    animation: spin 0.75s linear infinite;
+}
+
+/* Success checkmark animation */
+.checkmark {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: inline-block;
+    background-color: #4caf50;
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.checkmark:after {
+    content: '';
+    position: absolute;
+    left: 22px;
+    top: 12px;
+    width: 15px;
+    height: 25px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+.investment-graph-section {
+    max-width: 800px;
+    margin: auto;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    min-height: 500px;
+    /* Increase the height */
+}
+
+/* Chart container */
+.chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    margin: auto;
+    min-height: 350px;
+    /* Expand height */
+}
+
+/* Investment details */
+#investmentDetails {
+    display: flex;
+    justify-content: space-between;
+    /* Ensures even spacing */
+    align-items: center;
+    /* Aligns content */
+    flex-wrap: wrap;
+    /* Allows stacking on smaller screens */
+    padding: 10px;
+}
+
+/* Ensure both columns share equal width */
+#investmentDetails .col-md-6 {
+    flex: 1 1 45%;
+    max-width: 45%;
+    text-align: center;
+}
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .investment-graph-section {
+        padding: 15px;
+        min-height: 600px;
+        /* Even larger height for mobile */
+    }
+
+    .chart-container {
+        min-height: 400px;
+        /* Increase chart height for mobile */
+    }
+
+        #investmentDetails {
+            flex-wrap: nowrap;
+            /* Prevent stacking */
+        }
+    
+        #investmentDetails .col-md-6 {
+            flex: 1 1 auto;
+            max-width: 50%;
+        }
+        }

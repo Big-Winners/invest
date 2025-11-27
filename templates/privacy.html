@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='privacy.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    </head>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Privacy Policy</h2>
+        <p>At <strong>Big Winners</strong>, we value your privacy and are committed to protecting your personal and
+            financial information. This Privacy Policy explains how we collect, use, store, and protect your data when
+            you interact with our platform, services, and website.</p>
+        <p>By using Big Winners, you agree to the terms outlined in this policy.</p>
+
+        <hr>
+
+        <h3>1. Information We Collect</h3>
+        <p>We may collect the following types of information:</p>
+
+        <h4>a. Personal Information</h4>
+        <ul>
+            <li>Full name</li>
+            <li>Phone number</li>
+            <li>Email address</li>
+            <li>Country</li>
+    
+        </ul>
+
+        <h4>b. Financial Information</h4>
+        <ul>
+            <li>Mobile money details (e.g., M-Pesa, Airtel Money)</li>
+            <li>Card details (e.g., Visa or other supported cards)</li>
+            <li>Transaction history</li>
+            <li>Investment records</li>
+        </ul>
+
+        <h4>c. Technical Information</h4>
+        <ul>
+            <li>IP address</li>
+            <li>Device type and browser</li>
+            <li>Log data (access times, pages viewed)</li>
+            <li>Cookies and tracking technologies</li>
+        </ul>
+
+        <hr>
+
+        <h3>2. How We Use Your Information</h3>
+        <p>Your information is used to:</p>
+        <ul>
+            <li>Facilitate account registration and verification</li>
+            <li>Process deposits, trades, and withdrawals</li>
+            <li>Communicate with you about your account and transactions</li>
+            <li>Monitor and improve platform functionality and user experience</li>
+            <li>Comply with legal and regulatory requirements (e.g., anti-money laundering laws)</li>
+            <li>Prevent fraud, abuse, or unauthorized access</li>
+        </ul>
+
+        <hr>
+
+        <h3>3. Sharing of Information</h3>
+        <p><strong>Big Winners</strong> does <em>not sell or rent</em> your personal data to third parties. We may share
+            your information in the following limited circumstances:</p>
+        <ul>
+            <li>With <strong>regulatory authorities</strong> if required by law</li>
+            <li>With <strong>payment processors</strong> to complete your transactions</li>
+            <li>With <strong>third-party service providers</strong> who assist in maintaining our platform (e.g.,
+                KYC/AML services), under strict confidentiality agreements</li>
+            <li>To <strong>enforce our Terms and Conditions</strong> or protect the rights, property, or safety of Big
+                Winners and its users</li>
+        </ul>
+
+        <hr>
+
+        <h3>4. Data Security</h3>
+        <p>We implement strong security measures to protect your information, including:</p>
+        <ul>
+            <li>Secure Socket Layer (SSL) encryption</li>
+            <li>Two-factor authentication (2FA) for account access</li>
+            <li>Regular security audits and system monitoring</li>
+            <li>Secure storage of sensitive data using industry best practices</li>
+        </ul>
+        <p>Despite these efforts, no system is 100% secure, and we cannot guarantee absolute protection of your data.
+        </p>
+
+        <hr>
+
+        <h3>5. Data Retention</h3>
+        <p>We retain your personal data for as long as your account remains active or as necessary to:</p>
+        <ul>
+            <li>Fulfill our legal and contractual obligations</li>
+            <li>Resolve disputes</li>
+            <li>Enforce our agreements</li>
+        </ul>
+        <p>Upon account closure, we may retain limited data for record-keeping and compliance purposes.</p>
+
+        <hr>
+
+        <h3>6. Your Rights</h3>
+        <p>Depending on your jurisdiction, you may have the right to:</p>
+        <ul>
+            <li>Access the personal data we hold about you</li>
+            <li>Correct inaccurate or incomplete data</li>
+            <li>Request deletion of your data, subject to legal retention limits</li>
+            <li>Withdraw consent for certain data processing activities</li>
+            <li>File a complaint with a data protection authority</li>
+        </ul>
+        <p>To exercise these rights, please contact us at <em>[Insert contact email]</em>.</p>
+
+        <hr>
+
+        <h3>7. Use of Cookies</h3>
+        <p>We use cookies and similar technologies to:</p>
+        <ul>
+            <li>Improve your browsing experience</li>
+            <li>Analyze site traffic and usage</li>
+            <li>Provide personalized content and services</li>
+        </ul>
+        <p>You can control cookie settings in your browser, but disabling them may affect the functionality of our
+            platform.</p>
+
+        <hr>
+
+        <h3>8. Children’s Privacy</h3>
+        <p>Our services are <strong>not intended for individuals under the age of 18</strong>. We do not knowingly
+            collect personal data from minors. If we discover that a minor has provided personal information, we will
+            delete it promptly.</p>
+
+        <hr>
+
+        <h3>9. Changes to This Policy</h3>
+        <p>We may update this Privacy Policy from time to time. Changes will be posted on our website with an updated
+            effective date. Continued use of our services after changes are published constitutes your acceptance of the
+            revised policy.</p>
+
+        <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+    </div>
+    <!-- Menu Icon -->
+    <div class="menu-container">
+        <i class="fas fa-bars menu-icon" onclick="toggleMenu()"></i>
+        <div class="menu-dropdown" id="menuDropdown">
+            <!-- Home Section -->
+            <div class="menu-item">
+                <a href="/dashboard"><i class="fas fa-home"></i> <span>Home</span></a>
+            </div>
+    
+            <!-- Profile Section -->
+            <div class="menu-item profile-section">
+                <a href="javascript:void(0);" onclick="toggleProfileDetails()">
+                    <i class="fas fa-user-circle"></i> <span>Profile</span>
+                </a>
+            </div>
+            <div class="profile-details" id="profileDetails">
+                <!-- Profile Picture or Initials -->
+                <div class="profile-picture-container" id="profilePictureContainer">
+                    <img id="profilePicture"
+                        src="{{ url_for('static', filename='uploads/' + session.get('profile_picture', 'default.jpg')) }}"
+                        alt="Profile Picture">
+                </div>
+                <p><i class="fas fa-user"></i> <strong>Username:</strong> {{ session.get('user', 'Guest') }}</p>
+                <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not available')
+                    }}</p>
+            </div>
+    
+            <h3><i class="fas fa-file-contract"></i> Subscription Plans</h3>
+            <ul>
+                
+                <li><i class="fas fa-check"></i> <a href="/invest">Standard Plan</a></li>
+                <li><i class="fas fa-check"></i> <a href="/invest">VIP Plan</a></li>
+            </ul>
+            <h3><i class="fas fa-list"></i> More Options</h3>
+            <ul>
+                <li>
+                    <a href="/account-settings">
+                        <i class="fas fa-cog"></i> <span>Account Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/about">
+                        <i class="fas fa-info-circle"></i> <span>About Us</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('terms') }}">
+                        <i class="fas fa-file-alt"></i> <span>Terms & Conditions</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/logout">
+                        <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function toggleMenu() {
+            const menuDropdown = document.getElementById('menuDropdown');
+            menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleProfileDetails() {
+            const profileDetails = document.getElementById('profileDetails');
+            profileDetails.style.display = profileDetails.style.display === 'block' ? 'none' : 'block';
+        }
+    </script>
+    
+    
+
+</body>
+<footer>
+    <p>&copy; 2025 Big Winners. All rights reserved.</p>
+</footer>
+</html>
