@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 import pymongo
 import random
 import string
+import base64
+import uuid
+from datetime import datetime
 from pymongo import MongoClient
 import requests
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify, flash, get_flashed_messages
@@ -1371,7 +1374,7 @@ def kyc_verification():
 
 @app.route("/submit_kyc", methods=["POST"])
 def submit_kyc():
-    """Submit KYC verification documents"""
+    """Submit KYC verification documents with image storage"""
     if "user_email" not in session:
         return jsonify({"success": False, "message": "Not logged in"}), 401
     
@@ -1384,50 +1387,105 @@ def submit_kyc():
             if not data.get(field):
                 return jsonify({"success": False, "message": f"Missing {field}"}), 400
         
+        # Generate unique filenames
+        user_id = session["user_id"]
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        
+        # Create KYC uploads directory if it doesn't exist
+        kyc_upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], "kyc_docs")
+        os.makedirs(kyc_upload_dir, exist_ok=True)
+        
+        # Save images to files and store paths instead of base64
+        saved_files = {}
+        
+        for field in required_fields:
+            # Extract base64 data
+            base64_data = data[field]
+            if base64_data.startswith('data:image'):
+                # Remove data URL prefix if present
+                base64_data = base64_data.split(',')[1] if ',' in base64_data else base64_data
+            
+            # Decode base64
+            try:
+                image_data = base64.b64decode(base64_data)
+            except Exception as e:
+                return jsonify({"success": False, "message": f"Invalid {field} image format"}), 400
+            
+            # Generate filename
+            file_ext = ".jpg"  # Default to jpg, you could detect from base64 header
+            filename = f"kyc_{user_id}_{field}_{timestamp}{file_ext}"
+            filepath = os.path.join(kyc_upload_dir, filename)
+            
+            # Save file
+            try:
+                with open(filepath, 'wb') as f:
+                    f.write(image_data)
+                
+                # Store relative path in database
+                saved_files[field] = f"kyc_docs/{filename}"
+                
+                # For production on Render, also compress large images
+                if os.path.getsize(filepath) > 2 * 1024 * 1024:  # > 2MB
+                    compress_image(filepath)
+                    
+            except Exception as e:
+                print(f"Error saving {field} image: {e}")
+                # Clean up any saved files
+                for saved_file in saved_files.values():
+                    try:
+                        os.remove(os.path.join(app.config["UPLOAD_FOLDER"], saved_file))
+                    except:
+                        pass
+                return jsonify({"success": False, "message": f"Failed to save {field} image"}), 500
+        
         # Check if user already has pending KYC
         existing_kyc = kyc_collection.find_one({
-            "user_id": session["user_id"], 
+            "user_id": user_id, 
             "status": "pending"
         })
         
+        kyc_data = {
+            "user_id": user_id,
+            "email": session["user_email"],
+            "username": session["user"],
+            "fullname": data.get("fullname", ""),
+            "front_id_path": saved_files["front_id"],
+            "back_id_path": saved_files["back_id"],
+            "face_image_path": saved_files["face_image"],
+            "status": "pending",
+            "submitted_at": datetime.utcnow(),
+            "reviewed_at": None,
+            "reviewed_by": None,
+            "notes": "",
+            "doc_type": data.get("doc_type", "national_id"),
+            "doc_number": data.get("doc_number", "")
+        }
+        
         if existing_kyc:
+            # Delete old files
+            for field in ["front_id_path", "back_id_path", "face_image_path"]:
+                if field in existing_kyc:
+                    old_file = existing_kyc[field]
+                    if old_file and old_file.startswith("kyc_docs/"):
+                        try:
+                            os.remove(os.path.join(app.config["UPLOAD_FOLDER"], old_file))
+                        except:
+                            pass
+            
             # Update existing KYC
             kyc_collection.update_one(
                 {"_id": existing_kyc["_id"]},
-                {"$set": {
-                    "front_id_data": data["front_id"],
-                    "back_id_data": data["back_id"],
-                    "face_image_data": data["face_image"],
-                    "submitted_at": datetime.utcnow(),
-                    "notes": ""
-                }}
+                {"$set": kyc_data}
             )
             kyc_id = existing_kyc["_id"]
         else:
             # Create new KYC submission
-            kyc_data = {
-                "user_id": session["user_id"],
-                "email": session["user_email"],
-                "username": session["user"],
-                "fullname": data.get("fullname", ""),
-                "front_id_data": data["front_id"],
-                "back_id_data": data["back_id"],
-                "face_image_data": data["face_image"],
-                "status": "pending",
-                "submitted_at": datetime.utcnow(),
-                "reviewed_at": None,
-                "reviewed_by": None,
-                "notes": "",
-                "doc_type": data.get("doc_type", "national_id"),
-                "doc_number": data.get("doc_number", "")
-            }
-            
             result = kyc_collection.insert_one(kyc_data)
             kyc_id = result.inserted_id
         
         # Update user's KYC status
         users_collection.update_one(
-            {"_id": ObjectId(session["user_id"])},
+            {"_id": ObjectId(user_id)},
             {"$set": {
                 "kyc_status": "pending",
                 "kyc_submitted_at": datetime.utcnow(),
@@ -1455,6 +1513,42 @@ def submit_kyc():
     except Exception as e:
         print(f"Error submitting KYC: {e}")
         return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
+# Add this helper function for image compression
+def compress_image(filepath, max_size_kb=1024):
+    """Compress image if it's too large"""
+    try:
+        from PIL import Image
+        import io
+        
+        # Check current size
+        current_size_kb = os.path.getsize(filepath) / 1024
+        if current_size_kb <= max_size_kb:
+            return True
+        
+        # Open and compress image
+        with Image.open(filepath) as img:
+            # Convert to RGB if necessary
+            if img.mode in ('RGBA', 'LA'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'RGBA':
+                    background.paste(img, mask=img.split()[-1])
+                else:
+                    background.paste(img, mask=img)
+                img = background
+            
+            # Save with compression
+            img.save(filepath, 'JPEG', optimize=True, quality=85)
+            
+        return True
+        
+    except ImportError:
+        print("PIL/Pillow not installed, skipping compression")
+        return False
+    except Exception as e:
+        print(f"Error compressing image: {e}")
+        return False
 
 
 # Helper function for KYC email notifications
