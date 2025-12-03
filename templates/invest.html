@@ -36,6 +36,40 @@
         .spinner-border-sm {
             margin-left: 10px;
         }
+        
+        .payment-method-btn {
+            margin: 5px;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .payment-method-btn:hover {
+            background: #f8f9fa;
+            border-color: #007bff;
+        }
+        
+        .payment-method-btn.selected {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .payment-method-btn i {
+            margin-right: 8px;
+        }
+        
+        .qr-code {
+            max-width: 200px;
+            margin: 15px auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background: white;
+        }
     </style>
 </head>
 
@@ -61,8 +95,7 @@
                         alt="Profile Picture">
                 </div>
                 <p><i class="fas fa-user"></i> <strong>Username:</strong> {{ session.get('user', 'Guest') }}</p>
-                <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not available')
-                    }}
+                <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not available') }}
                 </p>
             </div>
 
@@ -157,37 +190,128 @@
     <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <script>
+        // Global variables
+        let selectedPlan = '';
+        let selectedAmountUSD = 0;
+        let selectedCountry = '';
+        let selectedPaymentMethod = '';
+
+        // Payment method constants
+        const PAYMENT_METHODS = {
+            LOCAL: 'local',
+            BTC: 'btc'
+        };
+
+        // Countries that use Bitcoin payment
+        const BITCOIN_COUNTRIES = ['USA', 'Canada', 'South Africa', 'Nigeria', 'UAE', 'Kuwait'];
+        
+        // Countries that use local payment methods
+        const LOCAL_PAYMENT_COUNTRIES = ['Kenya', 'Uganda', 'Rwanda', 'Tanzania', 'Zambia', 'South Sudan'];
+
         function showPlan(plan) {
             document.querySelectorAll('.plan-section').forEach(section => section.classList.remove('active'));
             document.getElementById(plan).classList.add('active');
         }
 
-        // Store global variables for payment context
-        let selectedPlan = '';
-        let selectedAmountUSD = 0;
-
         // New main entry for payment - opens country modal
         function payNow(plan) {
             selectedPlan = plan;
             selectedAmountUSD = parseFloat(document.getElementById(`amount_${plan}`).value);
+            selectedPaymentMethod = ''; // Reset payment method
 
             // Show the country modal
             const countryModal = new bootstrap.Modal(document.getElementById('countryModal'));
             countryModal.show();
 
-            // Set button handler
-            document.getElementById('proceedCountryBtn').onclick = async function () {
-                const country = document.getElementById('selectedCountry').value;
-                countryModal.hide();
+            // Clear previous payment method selection
+            document.querySelectorAll('.payment-method-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+        }
 
-                if (country === "Kenya") {
-                    // Kenya: Go through Paystack
-                    convertAndPayWithPaystack(plan);
-                } else if (country) {
-                    // Others: Show manual payment
-                    showManualPayment(country, selectedAmountUSD, plan);
+        function handleCountrySelection() {
+            const country = document.getElementById('selectedCountry').value;
+            selectedCountry = country;
+            
+            // Hide payment method selection initially
+            document.getElementById('paymentMethodSection').style.display = 'none';
+            
+            if (!country) {
+                return;
+            }
+
+            // Determine available payment methods
+            if (BITCOIN_COUNTRIES.includes(country)) {
+                // Only BTC for these countries
+                showPaymentMethodSelection([PAYMENT_METHODS.BTC]);
+            } else if (LOCAL_PAYMENT_COUNTRIES.includes(country)) {
+                // For existing countries, offer both options
+                showPaymentMethodSelection([PAYMENT_METHODS.LOCAL, PAYMENT_METHODS.BTC]);
+            }
+        }
+
+        function showPaymentMethodSelection(methods) {
+            const paymentMethodSection = document.getElementById('paymentMethodSection');
+            const paymentMethodButtons = document.getElementById('paymentMethodButtons');
+            
+            // Clear previous buttons
+            paymentMethodButtons.innerHTML = '';
+            
+            // Create payment method buttons
+            methods.forEach(method => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'payment-method-btn';
+                button.onclick = () => selectPaymentMethod(method);
+                
+                if (method === PAYMENT_METHODS.LOCAL) {
+                    button.innerHTML = '<i class="fas fa-money-bill-wave"></i> Local Payment';
+                } else if (method === PAYMENT_METHODS.BTC) {
+                    button.innerHTML = '<i class="fab fa-bitcoin"></i> Bitcoin (BTC)';
                 }
-            };
+                
+                paymentMethodButtons.appendChild(button);
+            });
+            
+            // Show the section
+            paymentMethodSection.style.display = 'block';
+        }
+
+        function selectPaymentMethod(method) {
+            selectedPaymentMethod = method;
+            
+            // Update UI
+            document.querySelectorAll('.payment-method-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+            
+            // Enable proceed button
+            document.getElementById('proceedCountryBtn').disabled = false;
+        }
+
+        function proceedToPayment() {
+            if (!selectedCountry || !selectedPaymentMethod) {
+                showBootstrapAlert('warning', 'Please select both country and payment method');
+                return;
+            }
+
+            // Hide modal
+            const countryModal = bootstrap.Modal.getInstance(document.getElementById('countryModal'));
+            countryModal.hide();
+
+            // Route to appropriate payment method
+            if (selectedPaymentMethod === PAYMENT_METHODS.LOCAL) {
+                // Local payment methods
+                if (selectedCountry === "Kenya") {
+                    convertAndPayWithPaystack(selectedPlan);
+                } else {
+                    showManualPayment(selectedCountry, selectedAmountUSD, selectedPlan);
+                }
+            } else if (selectedPaymentMethod === PAYMENT_METHODS.BTC) {
+                // Bitcoin payment via Coinbase Commerce
+                initiateCoinbasePayment(selectedCountry, selectedAmountUSD, selectedPlan);
+            }
         }
 
         // Kenya: use Paystack
@@ -196,7 +320,6 @@
             const email = "{{ session.get('user_email', '') }}";
 
             if (!email) {
-                // Show Bootstrap alert for login
                 showBootstrapAlert('danger', 'You must be logged in to invest.');
                 window.location.href = "/login?next=/invest";
                 return;
@@ -249,6 +372,62 @@
             }
         }
 
+        // Coinbase Commerce Bitcoin payment
+        async function initiateCoinbasePayment(country, usdAmount, plan) {
+            const email = "{{ session.get('user_email', '') }}";
+            
+            if (!email) {
+                showBootstrapAlert('danger', 'You must be logged in to invest.');
+                window.location.href = "/login?next=/invest";
+                return;
+            }
+
+            try {
+                // Show loading
+                showBootstrapAlert('info', 'Creating Coinbase payment request...');
+
+                // Create Coinbase Commerce charge
+                const response = await fetch('/create_coinbase_charge', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        amount_usd: usdAmount,
+                        plan: plan,
+                        country: country
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.hosted_url) {
+                    // Redirect to Coinbase hosted checkout page
+                    window.location.href = data.hosted_url;
+                } else {
+                    showBootstrapAlert('danger', data.message || 'Failed to create payment');
+                }
+            } catch (error) {
+                showBootstrapAlert('danger', 'Error: ' + error.message);
+            }
+        }
+
+        // Function to check payment status (optional - can be used if you want manual checking)
+        async function checkCoinbasePaymentStatus(chargeId) {
+            try {
+                const response = await fetch(`/check_coinbase_payment/${chargeId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    return data.status;
+                }
+                return null;
+            } catch (error) {
+                console.error('Error checking payment:', error);
+                return null;
+            }
+        }
+
         // Manual Payment Instructions Modal
         async function showManualPayment(country, usdAmount, plan) {
             // Determine local currency
@@ -261,6 +440,7 @@
                 case "South Sudan": toCurrency = "SSP"; break;
                 case "Kenya": toCurrency = "KES"; break;
             }
+            
             // Convert USD to local
             let amountLocal = 0;
             let rate = 1;
@@ -269,7 +449,10 @@
                 const data = await resp.json();
                 amountLocal = data.converted;
                 rate = data.rate;
-            } catch (e) { amountLocal = usdAmount; }
+            } catch (e) { 
+                amountLocal = usdAmount; 
+                showBootstrapAlert('warning', 'Using approximate conversion rate');
+            }
 
             // Build payment instructions
             let instructions = '';
@@ -376,8 +559,8 @@
 
             // Add transaction/reference ID field to the modal
             const modalInstructions = `
-                    <h6>Pay <b>${amountLocal} ${toCurrency}</b> for your selected plan (${usdAmount} USD)</h6>
-                    <div>Conversion Rate: 1 USD = ${rate} ${toCurrency}</div>
+                    <h6>Pay <b>${amountLocal.toFixed(2)} ${toCurrency}</b> for your selected plan (${usdAmount} USD)</h6>
+                    <div>Conversion Rate: 1 USD = ${rate.toFixed(2)} ${toCurrency}</div>
                     <hr>
                     ${instructions}
                     <hr>
@@ -466,18 +649,36 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <select class="form-select" id="selectedCountry">
-                        <option value="" disabled selected>Select Country</option>
-                        <option value="Kenya">Kenya</option>
-                        <option value="Uganda">Uganda</option>
-                        <option value="Rwanda">Rwanda</option>
-                        <option value="Tanzania">Tanzania</option>
-                        <option value="Zambia">Zambia</option>
-                        <option value="South Sudan">South Sudan</option>
-                    </select>
+                    <div class="mb-3">
+                        <label class="form-label">Select Country:</label>
+                        <select class="form-select" id="selectedCountry" onchange="handleCountrySelection()">
+                            <option value="" disabled selected>Select Country</option>
+                            <!-- Existing Countries -->
+                            <option value="Kenya">Kenya</option>
+                            <option value="Uganda">Uganda</option>
+                            <option value="Rwanda">Rwanda</option>
+                            <option value="Tanzania">Tanzania</option>
+                            <option value="Zambia">Zambia</option>
+                            <option value="South Sudan">South Sudan</option>
+                            <!-- New Bitcoin Countries -->
+                            <option value="USA">USA</option>
+                            <option value="Canada">Canada</option>
+                            <option value="South Africa">South Africa</option>
+                            <option value="Nigeria">Nigeria</option>
+                            <option value="UAE">UAE</option>
+                            <option value="Kuwait">Kuwait</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Payment Method Selection Section -->
+                    <div id="paymentMethodSection" style="display: none;">
+                        <label class="form-label">Select Payment Method:</label>
+                        <div id="paymentMethodButtons" class="d-flex flex-wrap"></div>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" id="proceedCountryBtn">Proceed</button>
+                    <button type="button" class="btn btn-primary" id="proceedCountryBtn" 
+                            onclick="proceedToPayment()" disabled>Proceed</button>
                 </div>
             </div>
         </div>
@@ -496,6 +697,25 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-success" id="confirmManualPaymentBtn">I Have Paid</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bitcoin Payment Status Modal (Optional) -->
+    <div class="modal fade" id="bitcoinStatusModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="fab fa-bitcoin"></i> Bitcoin Payment Status</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="bitcoinStatusContent">
+                    <!-- Content will be set dynamically -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="window.location.href='/dashboard'">Go to Dashboard</button>
                 </div>
             </div>
         </div>

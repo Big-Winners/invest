@@ -6,6 +6,11 @@ import random
 import string
 import base64
 import uuid
+import hashlib
+import time
+import json
+import hmac
+from decimal import Decimal
 from datetime import datetime
 from pymongo import MongoClient
 import requests
@@ -61,6 +66,10 @@ def kyc_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Coinbase Commerce Configuration
+COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")
+COINBASE_WEBHOOK_SECRET = os.getenv("COINBASE_WEBHOOK_SECRET", "")  # Set this in your .env file
+COINBASE_COMMERCE_API_URL = "https://api.commerce.coinbase.com"
 
 # Configuration
 MONGO_URI = os.getenv("MONGO_URI")
@@ -81,9 +90,11 @@ try:
     client = MongoClient(MONGO_URI)
     db = client["investment_app"]
     users_collection = db["users"]
+    coinbase_payments_collection = db["coinbase_payments"]
 except pymongo.errors.ConnectionFailure as e:
     print(f"MongoDB Connection Error: {e}")
     exit(1)
+
 
 # Flask App Configuration
 app = Flask(__name__)
@@ -1851,8 +1862,328 @@ def kyc_image(filename):
     
     return send_file(filepath, mimetype=mime_type)
 
-
+@app.route("/create_coinbase_charge", methods=["POST"])
+def create_coinbase_charge():
+    """Create a Coinbase Commerce charge for Bitcoin payment"""
+    if "user_email" not in session:
+        return jsonify({"success": False, "message": "Not logged in"}), 401
     
+    try:
+        data = request.get_json()
+        amount_usd = float(data.get("amount_usd", 0))
+        plan = data.get("plan")
+        country = data.get("country")
+        
+        if not amount_usd or not plan:
+            return jsonify({"success": False, "message": "Missing required data"}), 400
+        
+        # Generate unique metadata for tracking
+        metadata = {
+            "user_id": session["user_id"],
+            "username": session["user"],
+            "email": session["user_email"],
+            "plan": plan,
+            "country": country,
+            "internal_reference": f"BW-{session['user_id'][-8:]}-{int(time.time())}"
+        }
+        
+        # Create charge on Coinbase Commerce
+        headers = {
+            "X-CC-Api-Key": COINBASE_API_KEY,
+            "X-CC-Version": "2018-03-22",
+            "Content-Type": "application/json"
+        }
+        
+        charge_data = {
+            "name": f"Big Winners - {plan} Plan",
+            "description": f"Investment in {plan} Plan - ${amount_usd}",
+            "pricing_type": "fixed_price",
+            "local_price": {
+                "amount": str(amount_usd),
+                "currency": "USD"
+            },
+            "metadata": metadata,
+            "redirect_url": url_for('coinbase_payment_success', _external=True),
+            "cancel_url": url_for('coinbase_payment_cancel', _external=True),
+            "requested_info": ["email"]
+        }
+        
+        response = requests.post(
+            f"{COINBASE_COMMERCE_API_URL}/charges",
+            headers=headers,
+            json=charge_data
+        )
+        
+        if response.status_code != 201:
+            error_msg = response.json().get('error', {}).get('message', 'Unknown error')
+            return jsonify({
+                "success": False, 
+                "message": f"Coinbase API Error: {error_msg}"
+            }), 400
+        
+        charge_response = response.json()
+        charge_data = charge_response.get('data', {})
+        
+        # Save payment record
+        coinbase_payment = {
+            "user_id": session["user_id"],
+            "username": session["user"],
+            "email": session["user_email"],
+            "charge_id": charge_data.get('id'),
+            "charge_code": charge_data.get('code'),
+            "amount_usd": amount_usd,
+            "plan": plan,
+            "country": country,
+            "status": "created",
+            "coinbase_status": charge_data.get('status', 'NEW'),
+            "payment_address": charge_data.get('addresses', {}).get('bitcoin'),
+            "hosted_url": charge_data.get('hosted_url'),
+            "metadata": metadata,
+            "created_at": datetime.utcnow(),
+            "expires_at": charge_data.get('expires_at'),
+            "confirmed_at": None
+        }
+        
+        coinbase_payments_collection.insert_one(coinbase_payment)
+        
+        return jsonify({
+            "success": True,
+            "charge_id": charge_data.get('id'),
+            "hosted_url": charge_data.get('hosted_url'),
+            "payment_address": charge_data.get('addresses', {}).get('bitcoin'),
+            "amount_usd": amount_usd,
+            "expires_at": charge_data.get('expires_at'),
+            "metadata": metadata
+        })
+        
+    except Exception as e:
+        print(f"Error creating Coinbase charge: {e}")
+        return jsonify({"success": False, "message": "Failed to create payment"}), 500
+
+@app.route("/coinbase_payment_success")
+def coinbase_payment_success():
+    """Handle successful payment redirect from Coinbase"""
+    charge_id = request.args.get('charge_id')
+    
+    if not charge_id:
+        flash("Payment reference missing", "warning")
+        return redirect(url_for('dashboard'))
+    
+    # Check payment status
+    payment = coinbase_payments_collection.find_one({"charge_id": charge_id})
+    if payment:
+        # Update session if this is the current user
+        if session.get("user_id") == payment["user_id"]:
+            if payment.get("status") == "confirmed":
+                flash("Payment confirmed successfully!", "success")
+            elif payment.get("status") == "pending":
+                flash("Payment is processing. Please wait for confirmation.", "info")
+            else:
+                flash("Payment completed. Awaiting confirmation.", "info")
+    
+    return redirect(url_for('dashboard'))
+
+@app.route("/coinbase_payment_cancel")
+def coinbase_payment_cancel():
+    """Handle cancelled payment"""
+    charge_id = request.args.get('charge_id')
+    
+    if charge_id:
+        # Update payment status
+        coinbase_payments_collection.update_one(
+            {"charge_id": charge_id},
+            {"$set": {
+                "status": "cancelled",
+                "coinbase_status": "CANCELLED"
+            }}
+        )
+    
+    flash("Payment was cancelled", "warning")
+    return redirect(url_for('invest'))
+
+@app.route("/coinbase_webhook", methods=["POST"])
+def coinbase_webhook():
+    """Handle Coinbase Commerce webhook notifications"""
+    # Verify webhook signature
+    signature = request.headers.get('X-CC-Webhook-Signature')
+    payload = request.data
+    
+    if not signature or not COINBASE_WEBHOOK_SECRET:
+        return jsonify({"error": "Invalid webhook configuration"}), 400
+    
+    # Verify signature
+    expected_signature = hmac.new(
+        COINBASE_WEBHOOK_SECRET.encode(),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+    
+    if not hmac.compare_digest(signature, expected_signature):
+        return jsonify({"error": "Invalid signature"}), 401
+    
+    # Process webhook
+    event = request.json
+    event_type = event.get('event', {}).get('type')
+    charge_data = event.get('event', {}).get('data', {})
+    charge_id = charge_data.get('id')
+    
+    if not charge_id:
+        return jsonify({"error": "No charge ID"}), 400
+    
+    # Update payment status based on event
+    if event_type == "charge:confirmed":
+        # Payment confirmed on blockchain
+        update_payment_status(charge_id, "confirmed", charge_data)
+        
+    elif event_type == "charge:created":
+        # Charge created
+        update_payment_status(charge_id, "created", charge_data)
+        
+    elif event_type == "charge:failed":
+        # Payment failed
+        update_payment_status(charge_id, "failed", charge_data)
+        
+    elif event_type == "charge:pending":
+        # Payment detected but not confirmed
+        update_payment_status(charge_id, "pending", charge_data)
+        
+    elif event_type == "charge:delayed":
+        # Payment delayed
+        update_payment_status(charge_id, "delayed", charge_data)
+    
+    return jsonify({"success": True}), 200
+
+def update_payment_status(charge_id, status, charge_data):
+    """Update payment status and activate investment if confirmed"""
+    # Update Coinbase payment record
+    update_data = {
+        "status": status,
+        "coinbase_status": charge_data.get('status'),
+        "updated_at": datetime.utcnow()
+    }
+    
+    # Add confirmation timestamp if confirmed
+    if status == "confirmed":
+        update_data["confirmed_at"] = datetime.utcnow()
+        update_data["transaction_hash"] = charge_data.get('transaction', {}).get('hash')
+    
+    coinbase_payments_collection.update_one(
+        {"charge_id": charge_id},
+        {"$set": update_data}
+    )
+    
+    # If payment is confirmed, activate investment
+    if status == "confirmed":
+        payment = coinbase_payments_collection.find_one({"charge_id": charge_id})
+        if payment:
+            # Activate user investment
+            users_collection.update_one(
+                {"_id": ObjectId(payment["user_id"])},
+                {"$set": {
+                    "investment_status": "active",
+                    "initial_investment": payment["amount_usd"],
+                    "investment_time": datetime.utcnow(),
+                    "payment_method": "bitcoin"
+                }}
+            )
+            
+            # Send confirmation email
+            try:
+                send_payment_confirmation_email(payment)
+            except Exception as e:
+                print(f"Error sending confirmation email: {e}")
+
+@app.route("/check_coinbase_payment/<charge_id>")
+def check_coinbase_payment(charge_id):
+    """Check payment status from Coinbase"""
+    if "user_email" not in session:
+        return jsonify({"success": False, "message": "Not logged in"}), 401
+    
+    try:
+        # Fetch updated status from Coinbase
+        headers = {
+            "X-CC-Api-Key": COINBASE_API_KEY,
+            "X-CC-Version": "2018-03-22"
+        }
+        
+        response = requests.get(
+            f"{COINBASE_COMMERCE_API_URL}/charges/{charge_id}",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            charge_data = response.json().get('data', {})
+            
+            # Update local record
+            coinbase_payments_collection.update_one(
+                {"charge_id": charge_id},
+                {"$set": {
+                    "coinbase_status": charge_data.get('status'),
+                    "updated_at": datetime.utcnow()
+                }}
+            )
+            
+            return jsonify({
+                "success": True,
+                "status": charge_data.get('status'),
+                "local_amount": charge_data.get('pricing', {}).get('local', {}).get('amount'),
+                "currency": charge_data.get('pricing', {}).get('local', {}).get('currency')
+            })
+        
+        return jsonify({"success": False, "message": "Failed to fetch status"}), 400
+        
+    except Exception as e:
+        print(f"Error checking payment: {e}")
+        return jsonify({"success": False, "message": "Internal error"}), 500
+
+def send_payment_confirmation_email(payment):
+    """Send payment confirmation email"""
+    msg = Message(
+        "Bitcoin Payment Confirmed - Big Winners",
+        recipients=[payment["email"]],
+        sender=app.config["MAIL_DEFAULT_SENDER"]
+    )
+    
+    msg.html = f"""
+    <h3>Bitcoin Payment Confirmed!</h3>
+    <p>Dear {payment['username']},</p>
+    
+    <p>Your Bitcoin payment of <strong>${payment['amount_usd']}</strong> has been confirmed.</p>
+    
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+        <p><strong>Payment Details:</strong></p>
+        <ul>
+            <li>Amount: ${payment['amount_usd']}</li>
+            <li>Plan: {payment['plan']}</li>
+            <li>Payment Method: Bitcoin</li>
+            <li>Transaction: {payment.get('transaction_hash', 'Confirmed')}</li>
+            <li>Confirmed: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</li>
+        </ul>
+    </div>
+    
+    <p>Your investment is now active and growing!</p>
+    
+    <a href="{url_for('dashboard', _external=True)}" 
+       style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+       View Dashboard
+    </a>
+    
+    <p><strong>The Big Winners Team</strong></p>
+    """
+    
+    mail.send(msg)
+
+# Add admin route to view Bitcoin payments
+@app.route("/admin/bitcoin_payments")
+@admin_required
+def admin_bitcoin_payments():
+    """Admin view for Bitcoin payments"""
+    bitcoin_payments = list(coinbase_payments_collection.find().sort("created_at", -1))
+    
+    return render_template(
+        "admin_bitcoin_payments.html",
+        bitcoin_payments=bitcoin_payments
+    )
     
     
 if __name__ == "__main__":
