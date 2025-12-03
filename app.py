@@ -6,7 +6,7 @@ import random
 import string
 from pymongo import MongoClient
 import requests
-from flask import Flask, render_template, request, redirect, session, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify, flash, get_flashed_messages
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
@@ -43,6 +43,20 @@ def admin_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
+def kyc_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_email" not in session:
+            return redirect(url_for("login"))
+        
+        user = users_collection.find_one({"email": session["user_email"]})
+        if not user or user.get("kyc_status") != "verified":
+            flash("KYC verification required to access this feature.", "warning")
+            return redirect(url_for("kyc_verification"))
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 # Configuration
 MONGO_URI = os.getenv("MONGO_URI")
@@ -115,6 +129,9 @@ def verify_reset_token(token, expiration=3600):
         return email
     except Exception:
         return False
+    
+# Add KYC collections
+kyc_collection = db["kyc_verifications"]
 
 @app.route("/")
 def welcome():
@@ -141,8 +158,6 @@ def register():
                 flash("You must accept the Terms and Conditions.", "danger")
                 return redirect(url_for("register"))
 
-            
-
             # Check for duplicate entries in MongoDB
             if users_collection.find_one({"email": data["email"]}):
                 flash("Email already in use. Please choose a different email.", "danger")
@@ -162,26 +177,36 @@ def register():
             data["initial_investment"] = 0.0
             data["investment_time"] = None
             data["investment_status"] = "none"
-
+            
+            # Add KYC status fields
+            data["kyc_status"] = "not_verified"
+            data["kyc_submitted_at"] = None
+            data["kyc_notification_dismissed"] = False
+            data["kyc_notification_last_shown"] = None
+            
             # Insert the user into MongoDB
             result = users_collection.insert_one(data)
-
+            
             # Update the session
             session.update({
                 "user_email": data["email"],
                 "user": data["username"],
                 "profile_picture": data["profile_picture"],
                 "user_id": str(result.inserted_id),
+                "kyc_status": "not_verified",  # Add KYC status to session
+                "kyc_notification_dismissed": False
             })
-
+            
             flash("Registration successful! Welcome to your dashboard.", "success")
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("dashboard"))  # Redirect to dashboard instead of KYC
+            
         except Exception as e:
             print(f"Error during registration: {e}")
             flash("An error occurred during registration. Please try again later.", "danger")
             return redirect(url_for("register"))
 
     return render_template("index.html")
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -316,6 +341,49 @@ def dashboard():
         session.clear()
         return redirect(url_for("login"))
 
+    # Add KYC status to session
+    session["kyc_status"] = user.get("kyc_status", "not_verified")
+    
+    # Check if we should show KYC notification
+    show_kyc_notification = False
+    notification_type = "none"  # none, popup, banner, badge
+    
+    if session["kyc_status"] == "not_verified":
+        # Check if user has dismissed the notification
+        kyc_notification_dismissed = user.get("kyc_notification_dismissed", False)
+        
+        # Check if KYC is already pending
+        kyc = kyc_collection.find_one({"user_id": session["user_id"], "status": "pending"})
+        if kyc:
+            session["kyc_status"] = "pending"
+            kyc_notification_dismissed = True  # Don't show notification if already submitted
+        
+        # Check if we should show notification based on dismissal status
+        if not kyc_notification_dismissed:
+            show_kyc_notification = True
+            
+            # Determine notification type based on user preferences or logic
+            # You can change this to 'popup', 'banner', or 'badge'
+            notification_type = "badge"
+            
+            # Check if it's been more than 24 hours since last shown (if tracking)
+            last_shown = user.get("kyc_notification_last_shown")
+            if last_shown:
+                last_shown_time = last_shown
+                current_time = datetime.utcnow()
+                hours_since_last_shown = (current_time - last_shown_time).total_seconds() / 3600
+                
+                # Only show notification if it's been more than 24 hours
+                if hours_since_last_shown < 24:
+                    show_kyc_notification = False
+            
+            # Update last shown time if showing notification
+            if show_kyc_notification and notification_type != "none":
+                users_collection.update_one(
+                    {"_id": ObjectId(session["user_id"])},
+                    {"$set": {"kyc_notification_last_shown": datetime.utcnow()}}
+                )
+    
     # Calculate investment progress
     investment_status = user.get("investment_status", "none")
     time_progress, time_remaining = 0, "0h 0m"
@@ -329,6 +397,7 @@ def dashboard():
         time_progress = min(max(elapsed_time / total_duration, 0), 1)
         time_left = max(maturity_time - current_time, timedelta(0))
         hours, minutes = divmod(time_left.seconds, 3600)
+        minutes = minutes // 60
         time_remaining = f"{hours}h {minutes}m"
 
     initial_investment = float(user.get("initial_investment", 0))
@@ -341,13 +410,43 @@ def dashboard():
             "time_remaining": time_remaining,
         }
     )
-    return render_template("dashboard.html", session=session)
+    
+    # Check for pending reviews count for badge
+    pending_reviews_count = pending_reviews_collection.count_documents({
+        "user_id": session["user_id"],
+        "status": "pending"
+    })
+    
+    # Check for any flashed messages
+    flashed_messages = []
+    for category, message in get_flashed_messages(with_categories=True):
+        flashed_messages.append({"category": category, "message": message})
+    
+    # Get user's KYC submission if pending
+    user_kyc_submission = None
+    if session["kyc_status"] == "pending":
+        user_kyc_submission = kyc_collection.find_one({
+            "user_id": session["user_id"],
+            "status": "pending"
+        })
+    
+    return render_template(
+        "dashboard.html", 
+        session=session, 
+        show_kyc_notification=show_kyc_notification,
+        notification_type=notification_type,
+        pending_reviews_count=pending_reviews_count,
+        user_kyc_submission=user_kyc_submission,
+        flashed_messages=flashed_messages
+    )
+
 
 @app.route("/forex_data")
 def forex_data():
     return jsonify({"forex_url": "https://fxpricing.com/fx-widget/market-currency-rates-widget.php?id=1,2,3,5,14,20"})
 
 @app.route("/invest")
+@kyc_required
 def invest():
     if "user_email" not in session:
         return redirect(url_for("login"))
@@ -657,6 +756,7 @@ def check_withdrawal():
     }), 200
 
 @app.route("/process_withdrawal", methods=["POST"])
+@kyc_required
 def process_withdrawal():
     if "user_email" not in session:
         return jsonify({"error": "User not logged in!"}), 401
@@ -960,6 +1060,8 @@ def admin_dashboard():
     invested_count = len(invested_users)
     total_invested = sum(float(u.get("initial_investment", 0)) for u in invested_users)
 
+    pending_kyc_count = kyc_collection.count_documents({"status": "pending"})
+
     return render_template(
         "admin_dashboard.html",
         pending_payments=pending_payments,
@@ -1125,6 +1227,443 @@ def reject_review(review_id):
     except Exception as e:
         flash("Error rejecting review", "danger")
         return redirect(url_for("admin_pending_reviews"))
+
+
+@app.route("/dismiss_kyc_notification", methods=["POST"])
+def dismiss_kyc_notification():
+    """Dismiss KYC notification for the current user"""
+    if "user_email" not in session:
+        return jsonify({"success": False, "message": "Not logged in"}), 401
+    
+    try:
+        # Update user's notification dismissal status
+        users_collection.update_one(
+            {"_id": ObjectId(session["user_id"])},
+            {"$set": {
+                "kyc_notification_dismissed": True,
+                "kyc_notification_dismissed_at": datetime.utcnow()
+            }}
+        )
+        
+        # Update session
+        session["kyc_notification_dismissed"] = True
+        
+        return jsonify({
+            "success": True, 
+            "message": "Notification dismissed",
+            "redirect_url": url_for("dashboard")
+        })
+        
+    except Exception as e:
+        print(f"Error dismissing KYC notification: {e}")
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
+@app.route("/reset_kyc_notification", methods=["POST"])
+def reset_kyc_notification():
+    """Reset KYC notification (e.g., after visiting KYC page without submitting)"""
+    if "user_email" not in session:
+        return jsonify({"success": False, "message": "Not logged in"}), 401
+    
+    try:
+        # Reset user's notification dismissal status
+        users_collection.update_one(
+            {"_id": ObjectId(session["user_id"])},
+            {"$set": {
+                "kyc_notification_dismissed": False,
+                "kyc_notification_last_shown": None
+            }}
+        )
+        
+        # Update session
+        session["kyc_notification_dismissed"] = False
+        
+        return jsonify({
+            "success": True, 
+            "message": "Notification reset",
+            "redirect_url": url_for("dashboard")
+        })
+        
+    except Exception as e:
+        print(f"Error resetting KYC notification: {e}")
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
+@app.route("/get_kyc_status", methods=["GET"])
+def get_kyc_status():
+    """API endpoint to get current KYC status"""
+    if "user_email" not in session:
+        return jsonify({"success": False, "message": "Not logged in"}), 401
+    
+    try:
+        user = users_collection.find_one({"email": session["user_email"]})
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+        
+        kyc_status = user.get("kyc_status", "not_verified")
+        notification_dismissed = user.get("kyc_notification_dismissed", False)
+        
+        # Check for pending KYC submission
+        pending_kyc = kyc_collection.find_one({
+            "user_id": session["user_id"],
+            "status": "pending"
+        })
+        
+        return jsonify({
+            "success": True,
+            "kyc_status": kyc_status,
+            "notification_dismissed": notification_dismissed,
+            "has_pending_submission": pending_kyc is not None,
+            "submission_date": pending_kyc.get("submitted_at").strftime("%Y-%m-%d") if pending_kyc else None
+        })
+        
+    except Exception as e:
+        print(f"Error getting KYC status: {e}")
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
+@app.route("/kyc_verification")
+def kyc_verification():
+    """KYC verification page"""
+    if "user_email" not in session:
+        return redirect(url_for("login"))
+    
+    # Check if KYC is already submitted or verified
+    user = users_collection.find_one({"email": session["user_email"]})
+    if not user:
+        session.clear()
+        return redirect(url_for("login"))
+    
+    kyc_status = user.get("kyc_status", "not_verified")
+    
+    if kyc_status == "verified":
+        flash("Your account is already verified!", "success")
+        return redirect(url_for("dashboard"))
+    
+    # Check if KYC is pending
+    kyc = kyc_collection.find_one({"user_id": session["user_id"], "status": "pending"})
+    
+    # Reset notification when user visits KYC page (they're taking action)
+    users_collection.update_one(
+        {"_id": ObjectId(session["user_id"])},
+        {"$set": {
+            "kyc_notification_dismissed": True,
+            "kyc_notification_last_shown": datetime.utcnow()
+        }}
+    )
+    session["kyc_notification_dismissed"] = True
+    
+    if kyc:
+        # User can view their submission but not resubmit
+        return render_template("kyc_verification.html", 
+                             can_resubmit=False, 
+                             kyc_data=kyc,
+                             kyc_status="pending",
+                             submission_date=kyc.get("submitted_at").strftime("%Y-%m-%d %H:%M"))
+    
+    # User can submit new KYC
+    return render_template("kyc_verification.html", 
+                         can_resubmit=True, 
+                         kyc_data=None,
+                         kyc_status="not_verified",
+                         submission_date=None)
+
+
+@app.route("/submit_kyc", methods=["POST"])
+def submit_kyc():
+    """Submit KYC verification documents"""
+    if "user_email" not in session:
+        return jsonify({"success": False, "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ["front_id", "back_id", "face_image"]
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"success": False, "message": f"Missing {field}"}), 400
+        
+        # Check if user already has pending KYC
+        existing_kyc = kyc_collection.find_one({
+            "user_id": session["user_id"], 
+            "status": "pending"
+        })
+        
+        if existing_kyc:
+            # Update existing KYC
+            kyc_collection.update_one(
+                {"_id": existing_kyc["_id"]},
+                {"$set": {
+                    "front_id_data": data["front_id"],
+                    "back_id_data": data["back_id"],
+                    "face_image_data": data["face_image"],
+                    "submitted_at": datetime.utcnow(),
+                    "notes": ""
+                }}
+            )
+            kyc_id = existing_kyc["_id"]
+        else:
+            # Create new KYC submission
+            kyc_data = {
+                "user_id": session["user_id"],
+                "email": session["user_email"],
+                "username": session["user"],
+                "fullname": data.get("fullname", ""),
+                "front_id_data": data["front_id"],
+                "back_id_data": data["back_id"],
+                "face_image_data": data["face_image"],
+                "status": "pending",
+                "submitted_at": datetime.utcnow(),
+                "reviewed_at": None,
+                "reviewed_by": None,
+                "notes": "",
+                "doc_type": data.get("doc_type", "national_id"),
+                "doc_number": data.get("doc_number", "")
+            }
+            
+            result = kyc_collection.insert_one(kyc_data)
+            kyc_id = result.inserted_id
+        
+        # Update user's KYC status
+        users_collection.update_one(
+            {"_id": ObjectId(session["user_id"])},
+            {"$set": {
+                "kyc_status": "pending",
+                "kyc_submitted_at": datetime.utcnow(),
+                "kyc_notification_dismissed": True
+            }}
+        )
+        
+        # Update session
+        session["kyc_status"] = "pending"
+        session["kyc_notification_dismissed"] = True
+        
+        # Send email notification to admin (optional)
+        try:
+            send_kyc_notification_email(session["user_email"], session["user"])
+        except Exception as email_error:
+            print(f"Email notification error: {email_error}")
+            # Don't fail if email fails
+        
+        return jsonify({
+            "success": True, 
+            "message": "KYC submitted successfully for review",
+            "redirect_url": url_for("dashboard")
+        })
+        
+    except Exception as e:
+        print(f"Error submitting KYC: {e}")
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
+# Helper function for KYC email notifications
+def send_kyc_notification_email(user_email, username):
+    """Send email to admin about new KYC submission"""
+    try:
+        admin_emails = ["admin@bigwinners.com"]  # Add your admin emails
+        
+        msg = Message(
+            "New KYC Submission - Big Winners",
+            recipients=admin_emails,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>New KYC Submission Received</h3>
+        <p><strong>User:</strong> {username}</p>
+        <p><strong>Email:</strong> {user_email}</p>
+        <p><strong>Submitted At:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p>Please review the KYC submission in the admin dashboard.</p>
+        <a href="{url_for('admin_kyc_review', _external=True)}" 
+           style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+           Review KYC Submissions
+        </a>
+        """
+        
+        mail.send(msg)
+        print(f"KYC notification email sent for user: {username}")
+    except Exception as e:
+        print(f"Error sending KYC notification email: {e}")
+
+def send_kyc_notification_email(user_email, username):
+    """Send email to admin about new KYC submission"""
+    try:
+        admin_emails = ["admin@bigwinners.com"]  # Add your admin emails
+        
+        msg = Message(
+            "New KYC Submission - Big Winners",
+            recipients=admin_emails,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>New KYC Submission Received</h3>
+        <p><strong>User:</strong> {username}</p>
+        <p><strong>Email:</strong> {user_email}</p>
+        <p><strong>Submitted At:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p>Please review the KYC submission in the admin dashboard.</p>
+        <a href="{url_for('admin_kyc_review', _external=True)}" 
+           style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+           Review KYC Submissions
+        </a>
+        """
+        
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending KYC notification email: {e}")
+
+@app.route("/admin/kyc_review")
+@admin_required
+def admin_kyc_review():
+    """Admin page to review pending KYC submissions"""
+    pending_kyc = list(kyc_collection.find({"status": "pending"}).sort("submitted_at", -1))
+    approved_kyc = list(kyc_collection.find({"status": "approved"}).sort("reviewed_at", -1).limit(20))
+    rejected_kyc = list(kyc_collection.find({"status": "rejected"}).sort("reviewed_at", -1).limit(20))
+    
+    return render_template(
+        "admin_kyc_review.html",
+        pending_kyc=pending_kyc,
+        approved_kyc=approved_kyc,
+        rejected_kyc=rejected_kyc
+    )
+
+
+
+@app.route("/admin/approve_kyc/<kyc_id>", methods=["POST"])
+@admin_required
+def approve_kyc(kyc_id):
+    """Approve a KYC submission"""
+    try:
+        kyc = kyc_collection.find_one({"_id": ObjectId(kyc_id)})
+        if not kyc:
+            flash("KYC submission not found", "danger")
+            return redirect(url_for("admin_kyc_review"))
+        
+        # Update KYC status
+        kyc_collection.update_one(
+            {"_id": ObjectId(kyc_id)},
+            {"$set": {
+                "status": "approved",
+                "reviewed_at": datetime.utcnow(),
+                "reviewed_by": session.get("user"),
+                "notes": request.form.get("notes", "")
+            }}
+        )
+        
+        # Update user's KYC status
+        users_collection.update_one(
+            {"_id": ObjectId(kyc["user_id"])},
+            {"$set": {"kyc_status": "verified"}}
+        )
+        
+        # Send approval email to user
+        try:
+            send_kyc_approval_email(kyc["email"], kyc["username"])
+        except:
+            pass
+        
+        flash("KYC approved successfully", "success")
+        return redirect(url_for("admin_kyc_review"))
+        
+    except Exception as e:
+        flash(f"Error approving KYC: {str(e)}", "danger")
+        return redirect(url_for("admin_kyc_review"))
+
+@app.route("/admin/reject_kyc/<kyc_id>", methods=["POST"])
+@admin_required
+def reject_kyc(kyc_id):
+    """Reject a KYC submission"""
+    try:
+        kyc = kyc_collection.find_one({"_id": ObjectId(kyc_id)})
+        if not kyc:
+            flash("KYC submission not found", "danger")
+            return redirect(url_for("admin_kyc_review"))
+        
+        # Update KYC status
+        kyc_collection.update_one(
+            {"_id": ObjectId(kyc_id)},
+            {"$set": {
+                "status": "rejected",
+                "reviewed_at": datetime.utcnow(),
+                "reviewed_by": session.get("user"),
+                "notes": request.form.get("notes", "KYC rejected. Please ensure documents are clear and match your identity.")
+            }}
+        )
+        
+        # Update user's KYC status
+        users_collection.update_one(
+            {"_id": ObjectId(kyc["user_id"])},
+            {"$set": {"kyc_status": "rejected"}}
+        )
+        
+        # Update session if this is the current user
+        if session.get("user_id") == kyc["user_id"]:
+            session["kyc_status"] = "rejected"
+        
+        # Send rejection email to user
+        try:
+            send_kyc_rejection_email(kyc["email"], kyc["username"], request.form.get("notes", ""))
+        except:
+            pass
+        
+        flash("KYC rejected", "warning")
+        return redirect(url_for("admin_kyc_review"))
+        
+    except Exception as e:
+        flash(f"Error rejecting KYC: {str(e)}", "danger")
+        return redirect(url_for("admin_kyc_review"))
+
+def send_kyc_approval_email(user_email, username):
+    """Send KYC approval email to user"""
+    msg = Message(
+        "KYC Verification Approved - Big Winners",
+        recipients=[user_email],
+        sender=app.config["MAIL_DEFAULT_SENDER"]
+    )
+    
+    msg.html = f"""
+    <h3>KYC Verification Approved!</h3>
+    <p>Dear {username},</p>
+    <p>We're pleased to inform you that your KYC verification has been approved.</p>
+    <p>You now have full access to all features on Big Winners platform.</p>
+    <p>Thank you for completing the verification process.</p>
+    <p><strong>The Big Winners Team</strong></p>
+    """
+    
+    mail.send(msg)
+
+def send_kyc_rejection_email(user_email, username, notes):
+    """Send KYC rejection email to user"""
+    msg = Message(
+        "KYC Verification Update - Big Winners",
+        recipients=[user_email],
+        sender=app.config["MAIL_DEFAULT_SENDER"]
+    )
+    
+    msg.html = f"""
+    <h3>KYC Verification Requires Attention</h3>
+    <p>Dear {username},</p>
+    <p>Your KYC verification submission requires additional attention.</p>
+    <p><strong>Reason:</strong> {notes}</p>
+    <p>Please login to your account and resubmit your KYC documents with the following in mind:</p>
+    <ul>
+        <li>Ensure all documents are clear and legible</li>
+        <li>Make sure photos are well-lit</li>
+        <li>Ensure the face photo matches the ID photo</li>
+        <li>All information should be visible and not cropped</li>
+    </ul>
+    <a href="{url_for('kyc_verification', _external=True)}" 
+       style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+       Resubmit KYC Documents
+    </a>
+    <p><strong>The Big Winners Team</strong></p>
+    """
+    
+    mail.send(msg)
+
+
+    
     
     
 if __name__ == "__main__":

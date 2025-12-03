@@ -37,7 +37,32 @@
     <!-- Main Container -->
     <div class="container">
         
-
+<!-- KYC Status Banner -->
+{% if session.get('kyc_status') != 'verified' %}
+<div class="kyc-banner alert alert-warning alert-dismissible fade show" role="alert">
+    <div class="d-flex align-items-center">
+        <i class="fas fa-user-shield fa-2x me-3"></i>
+        <div>
+            <h5 class="alert-heading mb-1">Complete KYC Verification Required</h5>
+            <p class="mb-0">To access all features and make withdrawals, please complete your identity verification.</p>
+        </div>
+    </div>
+    <div class="mt-3">
+        <a href="{{ url_for('kyc_verification') }}" class="btn btn-primary">
+            <i class="fas fa-user-check me-2"></i>Start KYC Verification
+        </a>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+<style>
+    .kyc-banner {
+        margin: 20px auto;
+        max-width: 1200px;
+        border-radius: 10px;
+        border-left: 5px solid #ffc107;
+    }
+</style>
+{% endif %}
         <!-- Real-Time Investment Graph Section -->
         <div class="investment-graph-section container mt-4 p-4 bg-light rounded shadow">
             <h3 class="text-center"><i class="fas fa-chart-line"></i> Investment Progress</h3>

@@ -130,6 +130,16 @@
             </div>
         </div>
     </div>
+    <!-- Add this card to the dashboard-cards row -->
+<div class="col-md-3">
+    <div class="card text-white bg-danger mb-3 h-100">
+        <div class="card-body text-center">
+            <h5 class="card-title"><i class="fas fa-user-shield"></i> Pending KYC</h5>
+            <p class="card-text fs-3 mb-0">{{ pending_kyc_count }}</p>
+            <a href="{{ url_for('admin_kyc_review') }}" class="text-white small">Review Now</a>
+        </div>
+    </div>
+</div>
 
     <div class="container mb-5">
         <h2 class="mb-4"><i class="fas fa-money-check-alt"></i> Pending Manual Payments</h2>

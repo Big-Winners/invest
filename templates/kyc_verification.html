@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KYC Verification - Big Winners</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .kyc-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        .kyc-step {
+            display: none;
+        }
+        .kyc-step.active {
+            display: block;
+        }
+        .upload-area {
+            border: 3px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            background: #f8f9fa;
+            border-color: #0056b3;
+        }
+        .upload-area i {
+            font-size: 48px;
+            color: #007bff;
+            margin-bottom: 15px;
+        }
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            margin-top: 10px;
+            display: none;
+        }
+        .face-scan-container {
+            width: 100%;
+            height: 400px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 20px;
+        }
+        #videoElement {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .capture-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 30px 0;
+        }
+        .progress {
+            height: 100%;
+            background: #28a745;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .step {
+            text-align: center;
+            flex: 1;
+            position: relative;
+        }
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: bold;
+            color: #6c757d;
+        }
+        .step.active .step-number {
+            background: #007bff;
+            color: white;
+        }
+        .step.completed .step-number {
+            background: #28a745;
+            color: white;
+        }
+        .step-title {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .step.active .step-title {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="container mt-3">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="kyc-container">
+        <h2 class="text-center mb-4"><i class="fas fa-user-check"></i> KYC Verification</h2>
+        <p class="text-center mb-4 text-muted">Complete your identity verification to access all features</p>
+        
+        <!-- Progress Bar -->
+        <div class="progress-bar">
+            <div class="progress" id="progressBar"></div>
+        </div>
+        
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active" id="step1-indicator">
+                <div class="step-number">1</div>
+                <div class="step-title">ID Front</div>
+            </div>
+            <div class="step" id="step2-indicator">
+                <div class="step-number">2</div>
+                <div class="step-title">ID Back</div>
+            </div>
+            <div class="step" id="step3-indicator">
+                <div class="step-number">3</div>
+                <div class="step-title">Face Scan</div>
+            </div>
+            <div class="step" id="step4-indicator">
+                <div class="step-number">4</div>
+                <div class="step-title">Review</div>
+            </div>
+        </div>
+
+        <!-- Step 1: ID Front Upload -->
+        <div class="kyc-step active" id="step1">
+            <h4 class="mb-3">Step 1: Upload Front of ID</h4>
+            <p class="text-muted mb-4">Upload a clear photo of the front side of your government-issued ID (Passport, Driver's License, National ID)</p>
+            
+            <div class="upload-area" id="frontIdUpload">
+                <i class="fas fa-id-card"></i>
+                <h5>Click to upload ID Front</h5>
+                <p class="text-muted">JPG, PNG or PDF (Max 5MB)</p>
+                <input type="file" id="frontIdInput" accept="image/*,.pdf" style="display: none;">
+            </div>
+            
+            <div id="frontIdPreview" class="text-center">
+                <img id="frontIdImage" class="preview-image" alt="Front ID Preview">
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <button class="btn btn-secondary" disabled>Previous</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 2: ID Back Upload -->
+        <div class="kyc-step" id="step2">
+            <h4 class="mb-3">Step 2: Upload Back of ID</h4>
+            <p class="text-muted mb-4">Upload a clear photo of the back side of your ID</p>
+            
+            <div class="upload-area" id="backIdUpload">
+                <i class="fas fa-id-card"></i>
+                <h5>Click to upload ID Back</h5>
+                <p class="text-muted">JPG, PNG or PDF (Max 5MB)</p>
+                <input type="file" id="backIdInput" accept="image/*,.pdf" style="display: none;">
+            </div>
+            
+            <div id="backIdPreview" class="text-center">
+                <img id="backIdImage" class="preview-image" alt="Back ID Preview">
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <button class="btn btn-secondary" onclick="prevStep()">Previous</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Face Scan -->
+        <div class="kyc-step" id="step3">
+            <h4 class="mb-3">Step 3: Face Verification</h4>
+            <p class="text-muted mb-4">Take a clear selfie for identity verification</p>
+            
+            <div class="face-scan-container">
+                <video id="videoElement" autoplay playsinline></video>
+                <canvas id="canvasElement" style="display:none;"></canvas>
+                <button class="btn btn-success capture-btn" onclick="capturePhoto()">
+                    <i class="fas fa-camera"></i> Capture Photo
+                </button>
+            </div>
+            
+            <div id="facePreview" class="text-center mt-3">
+                <img id="faceImage" class="preview-image" alt="Face Preview">
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <button class="btn btn-secondary" onclick="prevStep()">Previous</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Review and Submit -->
+        <div class="kyc-step" id="step4">
+            <h4 class="mb-3">Step 4: Review Your Information</h4>
+            
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6>ID Front</h6>
+                            <img id="reviewFrontId" class="img-fluid" style="max-height: 150px;" alt="ID Front">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6>ID Back</h6>
+                            <img id="reviewBackId" class="img-fluid" style="max-height: 150px;" alt="ID Back">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6>Face Photo</h6>
+                            <img id="reviewFace" class="img-fluid" style="max-height: 150px;" alt="Face">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Your KYC verification will be reviewed by our team within 24-48 hours. You'll receive an email notification once verified.
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <button class="btn btn-secondary" onclick="prevStep()">Previous</button>
+                <button class="btn btn-success" onclick="submitKYC()">
+                    <i class="fas fa-paper-plane"></i> Submit for Verification
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="text-center" style="display:none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Processing your KYC submission...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+        let kycData = {
+            front_id: null,
+            back_id: null,
+            face_image: null
+        };
+
+        // Initialize file uploads
+        document.getElementById('frontIdUpload').addEventListener('click', () => {
+            document.getElementById('frontIdInput').click();
+        });
+
+        document.getElementById('frontIdInput').addEventListener('change', function(e) {
+            handleFileUpload(e, 'frontIdImage', 'front_id');
+        });
+
+        document.getElementById('backIdUpload').addEventListener('click', () => {
+            document.getElementById('backIdInput').click();
+        });
+
+        document.getElementById('backIdInput').addEventListener('change', function(e) {
+            handleFileUpload(e, 'backIdImage', 'back_id');
+        });
+
+        function handleFileUpload(event, previewId, field) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Validate file size (5MB max)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File size must be less than 5MB');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById(previewId);
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                kycData[field] = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Webcam setup for face scan
+        let videoStream = null;
+
+        function startWebcam() {
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                } 
+            })
+            .then(function(stream) {
+                videoStream = stream;
+                const video = document.getElementById('videoElement');
+                video.srcObject = stream;
+            })
+            .catch(function(err) {
+                console.error("Error accessing webcam: ", err);
+                alert("Unable to access webcam. Please check permissions.");
+            });
+        }
+
+        function stopWebcam() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('videoElement');
+            const canvas = document.getElementById('canvasElement');
+            const context = canvas.getContext('2d');
+            
+            // Set canvas dimensions to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw video frame to canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convert to data URL
+            const faceImage = canvas.toDataURL('image/jpeg');
+            kycData.face_image = faceImage;
+            
+            // Show preview
+            const preview = document.getElementById('faceImage');
+            preview.src = faceImage;
+            preview.style.display = 'block';
+            
+            // Stop webcam after capture
+            stopWebcam();
+            
+            alert('Photo captured successfully!');
+        }
+
+        function updateProgress() {
+            const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            
+            // Update step indicators
+            for (let i = 1; i <= totalSteps; i++) {
+                const indicator = document.getElementById(`step${i}-indicator`);
+                if (i < currentStep) {
+                    indicator.className = 'step completed';
+                } else if (i === currentStep) {
+                    indicator.className = 'step active';
+                } else {
+                    indicator.className = 'step';
+                }
+            }
+        }
+
+        function nextStep() {
+            // Validate current step before proceeding
+            if (currentStep === 1 && !kycData.front_id) {
+                alert('Please upload the front of your ID');
+                return;
+            }
+            if (currentStep === 2 && !kycData.back_id) {
+                alert('Please upload the back of your ID');
+                return;
+            }
+            if (currentStep === 3 && !kycData.face_image) {
+                alert('Please capture your face photo');
+                return;
+            }
+            
+            // Hide current step
+            document.getElementById(`step${currentStep}`).classList.remove('active');
+            
+            currentStep++;
+            
+            // Show next step
+            document.getElementById(`step${currentStep}`).classList.add('active');
+            
+            // Update progress
+            updateProgress();
+            
+            // Start webcam on step 3
+            if (currentStep === 3) {
+                startWebcam();
+            }
+            
+            // Update review images
+            if (currentStep === 4) {
+                document.getElementById('reviewFrontId').src = kycData.front_id || '';
+                document.getElementById('reviewBackId').src = kycData.back_id || '';
+                document.getElementById('reviewFace').src = kycData.face_image || '';
+            }
+        }
+
+        function prevStep() {
+            // Hide current step
+            document.getElementById(`step${currentStep}`).classList.remove('active');
+            
+            currentStep--;
+            
+            // Show previous step
+            document.getElementById(`step${currentStep}`).classList.add('active');
+            
+            // Update progress
+            updateProgress();
+            
+            // Start/stop webcam as needed
+            if (currentStep === 3) {
+                startWebcam();
+            } else {
+                stopWebcam();
+            }
+        }
+
+        async function submitKYC() {
+            // Show loading spinner
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('step4').style.display = 'none';
+            
+            try {
+                const response = await fetch('/submit_kyc', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(kycData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show success message and redirect
+                    alert('KYC submitted successfully! Your account will be verified within 24-48 hours.');
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('Error submitting KYC: ' + result.message);
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                    document.getElementById('step4').style.display = 'block';
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('step4').style.display = 'block';
+            }
+        }
+
+        // Initialize
+        updateProgress();
+    </script>
+</body>
+</html>
