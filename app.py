@@ -18,6 +18,7 @@ from flask import url_for
 from bson import ObjectId
 from functools import wraps
 from flask import abort
+from flask import send_file, abort
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -1381,77 +1382,107 @@ def submit_kyc():
     try:
         data = request.get_json()
         
+        # ========== VALIDATION PHASE ==========
         # Validate required fields
         required_fields = ["front_id", "back_id", "face_image"]
         for field in required_fields:
             if not data.get(field):
-                return jsonify({"success": False, "message": f"Missing {field}"}), 400
+                return jsonify({
+                    "success": False, 
+                    "message": f"Missing {field.replace('_', ' ').title()}"
+                }), 400
         
-        # Generate unique filenames
         user_id = session["user_id"]
+        username = session["user"]
+        email = session["user_email"]
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         
+        # ========== FILE PREPARATION PHASE ==========
         # Create KYC uploads directory if it doesn't exist
         kyc_upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], "kyc_docs")
         os.makedirs(kyc_upload_dir, exist_ok=True)
         
-        # Save images to files and store paths instead of base64
         saved_files = {}
+        errors_occurred = False
+        saved_filepaths = []  # Track saved files for cleanup
         
         for field in required_fields:
-            # Extract base64 data
-            base64_data = data[field]
-            if base64_data.startswith('data:image'):
-                # Remove data URL prefix if present
-                base64_data = base64_data.split(',')[1] if ',' in base64_data else base64_data
-            
-            # Decode base64
             try:
+                # Extract and decode base64 data
+                base64_data = data[field]
+                if base64_data.startswith('data:image'):
+                    # Remove data URL prefix if present
+                    base64_data = base64_data.split(',')[1] if ',' in base64_data else base64_data
+                
                 image_data = base64.b64decode(base64_data)
-            except Exception as e:
-                return jsonify({"success": False, "message": f"Invalid {field} image format"}), 400
-            
-            # Generate filename
-            file_ext = ".jpg"
-            filename = f"kyc_{user_id}_{field}_{timestamp}{file_ext}"
-            filepath = os.path.join(kyc_upload_dir, filename)
-            
-            # Save file
-            try:
+                
+                # Validate image size (5MB max)
+                if len(image_data) > 5 * 1024 * 1024:
+                    return jsonify({
+                        "success": False, 
+                        "message": f"{field.replace('_', ' ').title()} exceeds 5MB limit"
+                    }), 400
+                
+                # Generate filename
+                file_ext = ".jpg"
+                filename = f"kyc_{user_id}_{field}_{timestamp}{file_ext}"
+                filepath = os.path.join(kyc_upload_dir, filename)
+                
+                # Save file
                 with open(filepath, 'wb') as f:
                     f.write(image_data)
                 
-                # Store relative path in database
-                saved_files[field] = f"kyc_docs/{filename}"
+                # Track saved files
+                saved_files[field] = filename
+                saved_filepaths.append(filepath)
                 
                 # Compress large images
                 if os.path.getsize(filepath) > 2 * 1024 * 1024:  # > 2MB
                     compress_image(filepath)
                     
+            except base64.binascii.Error:
+                return jsonify({
+                    "success": False, 
+                    "message": f"Invalid image format for {field.replace('_', ' ').title()}"
+                }), 400
             except Exception as e:
-                print(f"Error saving {field} image: {e}")
-                # Clean up any saved files
-                for saved_file in saved_files.values():
-                    try:
-                        os.remove(os.path.join(app.config["UPLOAD_FOLDER"], saved_file))
-                    except:
-                        pass
-                return jsonify({"success": False, "message": f"Failed to save {field} image"}), 500
+                print(f"Error processing {field} image: {e}")
+                errors_occurred = True
+                break
         
-        # Check if user already has pending KYC
+        # Clean up on error
+        if errors_occurred:
+            for filepath in saved_filepaths:
+                try:
+                    os.remove(filepath)
+                except:
+                    pass
+            return jsonify({
+                "success": False, 
+                "message": "Failed to process images. Please try again."
+            }), 500
+        
+        # ========== DATABASE OPERATION PHASE ==========
+        # Check for existing pending KYC
         existing_kyc = kyc_collection.find_one({
             "user_id": user_id, 
             "status": "pending"
         })
         
+        # Prepare KYC data
         kyc_data = {
             "user_id": user_id,
-            "email": session["user_email"],
-            "username": session["user"],
+            "email": email,
+            "username": username,
             "fullname": data.get("fullname", ""),
-            "front_id_path": saved_files["front_id"],
-            "back_id_path": saved_files["back_id"],
-            "face_image_path": saved_files["face_image"],
+            # File-based access
+            "front_id_filename": saved_files["front_id"],
+            "back_id_filename": saved_files["back_id"],
+            "face_image_filename": saved_files["face_image"],
+            # Base64 data for immediate display
+            "front_id_data": data["front_id"],
+            "back_id_data": data["back_id"],
+            "face_image_data": data["face_image"],
             "status": "pending",
             "submitted_at": datetime.utcnow(),
             "reviewed_at": None,
@@ -1461,16 +1492,18 @@ def submit_kyc():
             "doc_number": data.get("doc_number", "")
         }
         
+        # Handle existing KYC or create new
         if existing_kyc:
-            # Delete old files
-            for field in ["front_id_path", "back_id_path", "face_image_path"]:
-                if field in existing_kyc:
-                    old_file = existing_kyc[field]
-                    if old_file and old_file.startswith("kyc_docs/"):
-                        try:
-                            os.remove(os.path.join(app.config["UPLOAD_FOLDER"], old_file))
-                        except:
-                            pass
+            # Clean up old files before updating
+            old_fields = ["front_id_filename", "back_id_filename", "face_image_filename"]
+            for field in old_fields:
+                if field in existing_kyc and existing_kyc[field]:
+                    old_filepath = os.path.join(kyc_upload_dir, existing_kyc[field])
+                    try:
+                        if os.path.exists(old_filepath):
+                            os.remove(old_filepath)
+                    except Exception as e:
+                        print(f"Warning: Failed to delete old {field}: {e}")
             
             # Update existing KYC
             kyc_collection.update_one(
@@ -1483,6 +1516,7 @@ def submit_kyc():
             result = kyc_collection.insert_one(kyc_data)
             kyc_id = result.inserted_id
         
+        # ========== USER UPDATE PHASE ==========
         # Update user's KYC status
         users_collection.update_one(
             {"_id": ObjectId(user_id)},
@@ -1497,29 +1531,34 @@ def submit_kyc():
         session["kyc_status"] = "pending"
         session["kyc_notification_dismissed"] = True
         
-        # Send email notification to admin - ASYNC/NON-BLOCKING
+        # ========== NOTIFICATION PHASE ==========
+        # Send email notification to admin (non-blocking)
         try:
-            # Don't wait for email to complete
             import threading
             email_thread = threading.Thread(
                 target=send_kyc_notification_email,
-                args=(session["user_email"], session["user"])
+                args=(email, username)
             )
             email_thread.daemon = True
             email_thread.start()
         except Exception as email_error:
-            print(f"Email notification error (non-blocking): {email_error}")
-            # Don't fail if email fails - this is just a notification
+            print(f"Email notification error: {email_error}")
+            # Non-critical error, continue
         
+        # ========== RESPONSE PHASE ==========
         return jsonify({
             "success": True, 
             "message": "KYC submitted successfully for review",
-            "redirect_url": url_for("dashboard")
+            "redirect_url": url_for("dashboard"),
+            "kyc_id": str(kyc_id)
         })
         
     except Exception as e:
-        print(f"Error submitting KYC: {e}")
-        return jsonify({"success": False, "message": "Internal server error"}), 500
+        print(f"Error in submit_kyc: {e}")
+        return jsonify({
+            "success": False, 
+            "message": "Internal server error. Please try again later."
+        }), 500
 
 # Add this helper function for image compression
 def compress_image(filepath, max_size_kb=1024):
@@ -1598,13 +1637,54 @@ def send_kyc_notification_email(user_email, username):
         print(f"Error sending KYC notification email: {e}")
         # Don't crash the app - just log the error
 
+@app.route("/admin/kyc_details/<kyc_id>")
+@admin_required
+def kyc_details(kyc_id):
+    """Get detailed KYC information for admin view"""
+    try:
+        kyc = kyc_collection.find_one({"_id": ObjectId(kyc_id)})
+        if not kyc:
+            return jsonify({"error": "KYC not found"}), 404
+        
+        # Convert ObjectId to string for JSON serialization
+        kyc["_id"] = str(kyc["_id"])
+        kyc["user_id"] = str(kyc["user_id"])
+        
+        # Convert dates to string
+        if kyc.get("submitted_at"):
+            kyc["submitted_at"] = kyc["submitted_at"].isoformat()
+        if kyc.get("reviewed_at"):
+            kyc["reviewed_at"] = kyc["reviewed_at"].isoformat()
+        
+        return jsonify(kyc)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/admin/kyc_review")
 @admin_required
 def admin_kyc_review():
     """Admin page to review pending KYC submissions"""
+    # Get KYC submissions
     pending_kyc = list(kyc_collection.find({"status": "pending"}).sort("submitted_at", -1))
     approved_kyc = list(kyc_collection.find({"status": "approved"}).sort("reviewed_at", -1).limit(20))
     rejected_kyc = list(kyc_collection.find({"status": "rejected"}).sort("reviewed_at", -1).limit(20))
+    
+    # Ensure consistent data format for all submissions
+    all_kyc = pending_kyc + approved_kyc + rejected_kyc
+    for kyc in all_kyc:
+        # Ensure all required fields exist
+        kyc.setdefault('front_id_filename', '')
+        kyc.setdefault('back_id_filename', '')
+        kyc.setdefault('face_image_filename', '')
+        kyc.setdefault('front_id_data', '')
+        kyc.setdefault('back_id_data', '')
+        kyc.setdefault('face_image_data', '')
+        kyc.setdefault('doc_type', '')
+        kyc.setdefault('doc_number', '')
+        kyc.setdefault('fullname', '')
+        kyc.setdefault('notes', '')
+        kyc.setdefault('reviewed_by', '')
+        kyc.setdefault('reviewed_at', None)
     
     return render_template(
         "admin_kyc_review.html",
@@ -1612,7 +1692,6 @@ def admin_kyc_review():
         approved_kyc=approved_kyc,
         rejected_kyc=rejected_kyc
     )
-
 
 
 @app.route("/admin/approve_kyc/<kyc_id>", methods=["POST"])
@@ -1746,6 +1825,31 @@ def send_kyc_rejection_email(user_email, username, notes):
     """
     
     mail.send(msg)
+
+@app.route("/kyc_image/<path:filename>")
+def kyc_image(filename):
+    """Serve KYC images from the uploads/kyc_docs directory"""
+    # Security check: ensure the path is within the kyc_docs directory
+    if ".." in filename or filename.startswith("/"):
+        abort(404)
+    
+    # Get the full path
+    kyc_upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], "kyc_docs")
+    filepath = os.path.join(kyc_upload_dir, filename)
+    
+    # Check if file exists
+    if not os.path.exists(filepath):
+        abort(404)
+    
+    # Determine content type
+    if filename.lower().endswith('.pdf'):
+        mime_type = 'application/pdf'
+    elif filename.lower().endswith('.png'):
+        mime_type = 'image/png'
+    else:
+        mime_type = 'image/jpeg'
+    
+    return send_file(filepath, mimetype=mime_type)
 
 
     

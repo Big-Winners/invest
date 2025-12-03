@@ -65,6 +65,48 @@
             background: #dc3545;
             color: white;
         }
+        .user-info-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .doc-info {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .image-container {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .image-container .overlay {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+        .no-image {
+            height: 150px;
+            background: #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            color: #6c757d;
+        }
+        .action-buttons {
+            margin-top: 10px;
+        }
+        .notes-section {
+            margin-top: 10px;
+        }
+        .notes-section textarea {
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -99,7 +141,7 @@
                 <h4 class="mt-4">Pending KYC Submissions ({{ pending_kyc|length }})</h4>
                 {% if pending_kyc|length == 0 %}
                 <div class="alert alert-info">
-                    No pending KYC submissions.
+                    <i class="fas fa-info-circle"></i> No pending KYC submissions.
                 </div>
                 {% else %}
                 <div class="row">
@@ -108,58 +150,153 @@
                         <div class="card">
                             <div class="card-header">
                                 <span class="status-badge status-pending">PENDING</span>
-                                <span class="float-end">{{ kyc.submitted_at.strftime('%Y-%m-%d') }}</span>
+                                <span class="float-end">
+                                    <small class="text-muted">{{ kyc.submitted_at.strftime('%Y-%m-%d') }}</small>
+                                </span>
                             </div>
                             <div class="card-body">
-                                <p><strong>User:</strong> {{ kyc.username }}</p>
-                                <p><strong>Email:</strong> {{ kyc.email }}</p>
+                                <!-- User Information -->
+                                <div class="user-info-card">
+                                    <p class="mb-1"><strong><i class="fas fa-user"></i> User:</strong> {{ kyc.username }}</p>
+                                    <p class="mb-1"><strong><i class="fas fa-envelope"></i> Email:</strong> {{ kyc.email }}</p>
+                                    {% if kyc.fullname %}
+                                    <p class="mb-1"><strong><i class="fas fa-id-card"></i> Full Name:</strong> {{ kyc.fullname }}</p>
+                                    {% endif %}
+                                    {% if kyc.doc_type %}
+                                    <p class="mb-1"><strong><i class="fas fa-file-alt"></i> Document Type:</strong> {{ kyc.doc_type|title }}</p>
+                                    {% endif %}
+                                    {% if kyc.doc_number %}
+                                    <p class="mb-0"><strong><i class="fas fa-hashtag"></i> Document No:</strong> {{ kyc.doc_number }}</p>
+                                    {% endif %}
+                                </div>
                                 
-                                <div class="row">
+                                <!-- KYC Images -->
+                                <div class="row mb-3">
                                     <div class="col-4">
-                                        <img src="{{ kyc.front_id_data }}" class="kyc-image" 
-                                             data-bs-toggle="modal" data-bs-target="#imageModal"
-                                             onclick="showImage('{{ kyc.front_id_data }}', 'ID Front')">
+                                        <div class="image-container">
+                                            {% if kyc.front_id_data %}
+                                                <!-- Base64 encoded image -->
+                                                <img src="{{ kyc.front_id_data }}" 
+                                                     class="kyc-image" 
+                                                     alt="ID Front"
+                                                     data-bs-toggle="modal" 
+                                                     data-bs-target="#imageModal"
+                                                     onclick="showImage(this.src, 'ID Front - {{ kyc.username }}')">
+                                                <div class="overlay">Front</div>
+                                            {% elif kyc.front_id_filename %}
+                                                <!-- File-based image -->
+                                                {% set front_img_url = url_for('kyc_image', filename=kyc.front_id_filename) %}
+                                                <img src="{{ front_img_url }}" 
+                                                     class="kyc-image" 
+                                                     alt="ID Front"
+                                                     data-bs-toggle="modal" 
+                                                     data-bs-target="#imageModal"
+                                                     onclick="showImage('{{ front_img_url }}', 'ID Front - {{ kyc.username }}')">
+                                                <div class="overlay">Front</div>
+                                            {% else %}
+                                                <div class="no-image">
+                                                    <i class="fas fa-id-card fa-2x"></i>
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                         <small class="text-muted">ID Front</small>
                                     </div>
                                     <div class="col-4">
-                                        <img src="{{ kyc.back_id_data }}" class="kyc-image"
-                                             data-bs-toggle="modal" data-bs-target="#imageModal"
-                                             onclick="showImage('{{ kyc.back_id_data }}', 'ID Back')">
+                                        <div class="image-container">
+                                            {% if kyc.back_id_data %}
+                                                <img src="{{ kyc.back_id_data }}" 
+                                                     class="kyc-image" 
+                                                     alt="ID Back"
+                                                     data-bs-toggle="modal" 
+                                                     data-bs-target="#imageModal"
+                                                     onclick="showImage(this.src, 'ID Back - {{ kyc.username }}')">
+                                                <div class="overlay">Back</div>
+                                            {% elif kyc.back_id_filename %}
+                                                {% set back_img_url = url_for('kyc_image', filename=kyc.back_id_filename) %}
+                                                <img src="{{ back_img_url }}" 
+                                                     class="kyc-image" 
+                                                     alt="ID Back"
+                                                     data-bs-toggle="modal" 
+                                                     data-bs-target="#imageModal"
+                                                     onclick="showImage('{{ back_img_url }}', 'ID Back - {{ kyc.username }}')">
+                                                <div class="overlay">Back</div>
+                                            {% else %}
+                                                <div class="no-image">
+                                                    <i class="fas fa-id-card fa-2x"></i>
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                         <small class="text-muted">ID Back</small>
                                     </div>
                                     <div class="col-4">
-                                        <img src="{{ kyc.face_image_data }}" class="kyc-image"
-                                             data-bs-toggle="modal" data-bs-target="#imageModal"
-                                             onclick="showImage('{{ kyc.face_image_data }}', 'Face Photo')">
-                                        <small class="text-muted">Face</small>
+                                        <div class="image-container">
+                                            {% if kyc.face_image_data %}
+                                                <img src="{{ kyc.face_image_data }}" 
+                                                     class="kyc-image" 
+                                                     alt="Face Photo"
+                                                     data-bs-toggle="modal" 
+                                                     data-bs-target="#imageModal"
+                                                     onclick="showImage(this.src, 'Face Photo - {{ kyc.username }}')">
+                                                <div class="overlay">Face</div>
+                                            {% elif kyc.face_image_filename %}
+                                                {% set face_img_url = url_for('kyc_image', filename=kyc.face_image_filename) %}
+                                                <img src="{{ face_img_url }}" 
+                                                     class="kyc-image" 
+                                                     alt="Face Photo"
+                                                     data-bs-toggle="modal" 
+                                                     data-bs-target="#imageModal"
+                                                     onclick="showImage('{{ face_img_url }}', 'Face Photo - {{ kyc.username }}')">
+                                                <div class="overlay">Face</div>
+                                            {% else %}
+                                                <div class="no-image">
+                                                    <i class="fas fa-user fa-2x"></i>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <small class="text-muted">Face Photo</small>
                                     </div>
                                 </div>
                                 
-                                <form method="POST" action="{{ url_for('approve_kyc', kyc_id=kyc._id) }}" class="mt-3">
-                                    <div class="mb-2">
-                                        <label class="form-label">Notes:</label>
-                                        <textarea name="notes" class="form-control form-control-sm" rows="2" 
-                                                  placeholder="Optional notes for approval"></textarea>
-                                    </div>
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-success btn-sm">
-                                            <i class="fas fa-check"></i> Approve
-                                        </button>
-                                    </div>
-                                </form>
+                                <!-- Action Forms -->
+                                <div class="action-buttons">
+                                    <!-- Approve Form -->
+                                    <form method="POST" action="{{ url_for('approve_kyc', kyc_id=kyc._id) }}">
+                                        <div class="notes-section">
+                                            <label class="form-label"><small>Approval Notes (Optional):</small></label>
+                                            <textarea name="notes" class="form-control form-control-sm" rows="2" 
+                                                      placeholder="Add any notes for approval (optional)"></textarea>
+                                        </div>
+                                        <div class="d-grid gap-2 mt-2">
+                                            <button type="submit" class="btn btn-success btn-sm">
+                                                <i class="fas fa-check"></i> Approve KYC
+                                            </button>
+                                        </div>
+                                    </form>
+                                    
+                                    <!-- Reject Form -->
+                                    <form method="POST" action="{{ url_for('reject_kyc', kyc_id=kyc._id) }}" class="mt-3">
+                                        <div class="notes-section">
+                                            <label class="form-label"><small>Rejection Reason (Required):</small></label>
+                                            <textarea name="notes" class="form-control form-control-sm" rows="2" 
+                                                      placeholder="Please specify the reason for rejection" required></textarea>
+                                        </div>
+                                        <div class="d-grid gap-2 mt-2">
+                                            <button type="submit" class="btn btn-danger btn-sm" 
+                                                    onclick="return confirm('Are you sure you want to reject this KYC submission?')">
+                                                <i class="fas fa-times"></i> Reject KYC
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
                                 
-                                <form method="POST" action="{{ url_for('reject_kyc', kyc_id=kyc._id) }}" class="mt-2">
-                                    <div class="mb-2">
-                                        <textarea name="notes" class="form-control form-control-sm" rows="2" 
-                                                  placeholder="Reason for rejection (required)" required></textarea>
-                                    </div>
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-danger btn-sm" 
-                                                onclick="return confirm('Reject this KYC submission?')">
-                                            <i class="fas fa-times"></i> Reject
-                                        </button>
-                                    </div>
-                                </form>
+                                <!-- Submission Info -->
+                                <div class="mt-3 pt-3 border-top">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock"></i> Submitted: {{ kyc.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                                        <br>
+                                        <i class="fas fa-id-badge"></i> ID: {{ kyc._id }}
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -171,7 +308,7 @@
                 <h4 class="mt-5">Recently Approved ({{ approved_kyc|length }})</h4>
                 {% if approved_kyc|length == 0 %}
                 <div class="alert alert-info">
-                    No approved KYC submissions.
+                    <i class="fas fa-info-circle"></i> No approved KYC submissions.
                 </div>
                 {% else %}
                 <div class="table-responsive">
@@ -180,10 +317,13 @@
                             <tr>
                                 <th>User</th>
                                 <th>Email</th>
+                                <th>Document Type</th>
                                 <th>Submitted</th>
                                 <th>Approved</th>
                                 <th>Reviewed By</th>
+                                <th>Notes</th>
                                 <th>Status</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -191,10 +331,18 @@
                             <tr>
                                 <td>{{ kyc.username }}</td>
                                 <td>{{ kyc.email }}</td>
+                                <td>{{ kyc.doc_type|title if kyc.doc_type else 'N/A' }}</td>
                                 <td>{{ kyc.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td>{{ kyc.reviewed_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td>{{ kyc.reviewed_by }}</td>
+                                <td>{{ kyc.reviewed_at.strftime('%Y-%m-%d %H:%M') if kyc.reviewed_at else 'N/A' }}</td>
+                                <td>{{ kyc.reviewed_by or 'N/A' }}</td>
+                                <td><small>{{ kyc.notes[:50] }}{% if kyc.notes|length > 50 %}...{% endif %}</small></td>
                                 <td><span class="status-badge status-approved">APPROVED</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="viewKycDetails('{{ kyc._id }}')">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -206,7 +354,7 @@
                 <h4 class="mt-5">Recently Rejected ({{ rejected_kyc|length }})</h4>
                 {% if rejected_kyc|length == 0 %}
                 <div class="alert alert-info">
-                    No rejected KYC submissions.
+                    <i class="fas fa-info-circle"></i> No rejected KYC submissions.
                 </div>
                 {% else %}
                 <div class="table-responsive">
@@ -215,11 +363,13 @@
                             <tr>
                                 <th>User</th>
                                 <th>Email</th>
+                                <th>Document Type</th>
                                 <th>Submitted</th>
                                 <th>Rejected</th>
                                 <th>Reviewed By</th>
-                                <th>Notes</th>
+                                <th>Rejection Reason</th>
                                 <th>Status</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -227,11 +377,18 @@
                             <tr>
                                 <td>{{ kyc.username }}</td>
                                 <td>{{ kyc.email }}</td>
+                                <td>{{ kyc.doc_type|title if kyc.doc_type else 'N/A' }}</td>
                                 <td>{{ kyc.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td>{{ kyc.reviewed_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td>{{ kyc.reviewed_by }}</td>
-                                <td><small>{{ kyc.notes[:50] }}{% if kyc.notes|length > 50 %}...{% endif %}</small></td>
+                                <td>{{ kyc.reviewed_at.strftime('%Y-%m-%d %H:%M') if kyc.reviewed_at else 'N/A' }}</td>
+                                <td>{{ kyc.reviewed_by or 'N/A' }}</td>
+                                <td><small>{{ kyc.notes[:80] }}{% if kyc.notes|length > 80 %}...{% endif %}</small></td>
                                 <td><span class="status-badge status-rejected">REJECTED</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="viewKycDetails('{{ kyc._id }}')">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -253,16 +410,163 @@
                 <div class="modal-body text-center">
                     <img id="modalImage" class="modal-img" alt="KYC Image">
                 </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <a id="downloadImage" class="btn btn-primary" download="kyc_image.jpg">
+                        <i class="fas fa-download"></i> Download
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KYC Details Modal -->
+    <div class="modal fade" id="kycDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">KYC Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="kycDetailsContent">
+                    <!-- Content loaded dynamically -->
+                </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Image preview function
         function showImage(src, title) {
-            document.getElementById('modalImage').src = src;
-            document.getElementById('imageModalTitle').textContent = title;
+            const modalImage = document.getElementById('modalImage');
+            const modalTitle = document.getElementById('imageModalTitle');
+            const downloadLink = document.getElementById('downloadImage');
+            
+            modalImage.src = src;
+            modalTitle.textContent = title;
+            
+            // Set download link
+            downloadLink.href = src;
+            downloadLink.download = title.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.jpg';
         }
+
+        // View KYC details function
+        async function viewKycDetails(kycId) {
+            try {
+                const response = await fetch(`/admin/kyc_details/${kycId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch KYC details');
+                }
+                
+                const kyc = await response.json();
+                
+                // Build HTML content
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>User Information</h6>
+                            <table class="table table-sm">
+                                <tr><td><strong>Username:</strong></td><td>${kyc.username}</td></tr>
+                                <tr><td><strong>Email:</strong></td><td>${kyc.email}</td></tr>
+                                ${kyc.fullname ? `<tr><td><strong>Full Name:</strong></td><td>${kyc.fullname}</td></tr>` : ''}
+                                ${kyc.doc_type ? `<tr><td><strong>Document Type:</strong></td><td>${kyc.doc_type}</td></tr>` : ''}
+                                ${kyc.doc_number ? `<tr><td><strong>Document Number:</strong></td><td>${kyc.doc_number}</td></tr>` : ''}
+                                <tr><td><strong>Status:</strong></td><td>${kyc.status}</td></tr>
+                                <tr><td><strong>Submitted:</strong></td><td>${new Date(kyc.submitted_at).toLocaleString()}</td></tr>
+                                ${kyc.reviewed_at ? `<tr><td><strong>Reviewed:</strong></td><td>${new Date(kyc.reviewed_at).toLocaleString()}</td></tr>` : ''}
+                                ${kyc.reviewed_by ? `<tr><td><strong>Reviewed By:</strong></td><td>${kyc.reviewed_by}</td></tr>` : ''}
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Notes</h6>
+                            <div class="border rounded p-3 bg-light">
+                                ${kyc.notes || '<em>No notes available</em>'}
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6>Documents</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6>ID Front</h6>
+                            ${getImageHtml(kyc, 'front', 'ID Front')}
+                        </div>
+                        <div class="col-md-4">
+                            <h6>ID Back</h6>
+                            ${getImageHtml(kyc, 'back', 'ID Back')}
+                        </div>
+                        <div class="col-md-4">
+                            <h6>Face Photo</h6>
+                            ${getImageHtml(kyc, 'face', 'Face Photo')}
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('kycDetailsContent').innerHTML = html;
+                new bootstrap.Modal(document.getElementById('kycDetailsModal')).show();
+                
+            } catch (error) {
+                console.error('Error loading KYC details:', error);
+                document.getElementById('kycDetailsContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        Error loading KYC details: ${error.message}
+                    </div>
+                `;
+                new bootstrap.Modal(document.getElementById('kycDetailsModal')).show();
+            }
+        }
+
+        // Helper function to get image HTML
+        function getImageHtml(kyc, type, title) {
+            let src = '';
+            let filename = '';
+            
+            if (type === 'front') {
+                src = kyc.front_id_data || (kyc.front_id_filename ? `/kyc_image/${kyc.front_id_filename}` : '');
+                filename = kyc.front_id_filename || 'front_id';
+            } else if (type === 'back') {
+                src = kyc.back_id_data || (kyc.back_id_filename ? `/kyc_image/${kyc.back_id_filename}` : '');
+                filename = kyc.back_id_filename || 'back_id';
+            } else {
+                src = kyc.face_image_data || (kyc.face_image_filename ? `/kyc_image/${kyc.face_image_filename}` : '');
+                filename = kyc.face_image_filename || 'face_image';
+            }
+            
+            if (src) {
+                return `
+                    <div class="image-container mb-2">
+                        <img src="${src}" 
+                             class="img-fluid rounded border" 
+                             alt="${title}"
+                             style="max-height: 200px; cursor: pointer;"
+                             onclick="showImage('${src}', '${title} - ${kyc.username}')">
+                    </div>
+                    <a href="${src}" download="${filename}.jpg" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="fas fa-download"></i> Download
+                    </a>
+                `;
+            } else {
+                return `
+                    <div class="no-image rounded border d-flex align-items-center justify-content-center" style="height: 150px;">
+                        <i class="fas fa-image text-muted fa-2x"></i>
+                    </div>
+                    <small class="text-muted">No image available</small>
+                `;
+            }
+        }
+
+        // Initialize tooltips
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-hide alerts after 5 seconds
+            setTimeout(function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(function(alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+        });
     </script>
 </body>
 </html>
