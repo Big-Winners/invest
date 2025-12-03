@@ -1412,7 +1412,7 @@ def submit_kyc():
                 return jsonify({"success": False, "message": f"Invalid {field} image format"}), 400
             
             # Generate filename
-            file_ext = ".jpg"  # Default to jpg, you could detect from base64 header
+            file_ext = ".jpg"
             filename = f"kyc_{user_id}_{field}_{timestamp}{file_ext}"
             filepath = os.path.join(kyc_upload_dir, filename)
             
@@ -1424,7 +1424,7 @@ def submit_kyc():
                 # Store relative path in database
                 saved_files[field] = f"kyc_docs/{filename}"
                 
-                # For production on Render, also compress large images
+                # Compress large images
                 if os.path.getsize(filepath) > 2 * 1024 * 1024:  # > 2MB
                     compress_image(filepath)
                     
@@ -1497,12 +1497,19 @@ def submit_kyc():
         session["kyc_status"] = "pending"
         session["kyc_notification_dismissed"] = True
         
-        # Send email notification to admin (optional)
+        # Send email notification to admin - ASYNC/NON-BLOCKING
         try:
-            send_kyc_notification_email(session["user_email"], session["user"])
+            # Don't wait for email to complete
+            import threading
+            email_thread = threading.Thread(
+                target=send_kyc_notification_email,
+                args=(session["user_email"], session["user"])
+            )
+            email_thread.daemon = True
+            email_thread.start()
         except Exception as email_error:
-            print(f"Email notification error: {email_error}")
-            # Don't fail if email fails
+            print(f"Email notification error (non-blocking): {email_error}")
+            # Don't fail if email fails - this is just a notification
         
         return jsonify({
             "success": True, 
@@ -1513,7 +1520,6 @@ def submit_kyc():
     except Exception as e:
         print(f"Error submitting KYC: {e}")
         return jsonify({"success": False, "message": "Internal server error"}), 500
-
 
 # Add this helper function for image compression
 def compress_image(filepath, max_size_kb=1024):
@@ -1553,9 +1559,14 @@ def compress_image(filepath, max_size_kb=1024):
 
 # Helper function for KYC email notifications
 def send_kyc_notification_email(user_email, username):
-    """Send email to admin about new KYC submission"""
+    """Send email to admin about new KYC submission - With timeout"""
     try:
         admin_emails = ["admin@bigwinners.com"]  # Add your admin emails
+        
+        # Check if email is configured
+        if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+            print("Email not configured, skipping notification")
+            return
         
         msg = Message(
             "New KYC Submission - Big Winners",
@@ -1574,38 +1585,18 @@ def send_kyc_notification_email(user_email, username):
            Review KYC Submissions
         </a>
         """
+        
+        # Send with timeout
+        import socket
+        socket.setdefaulttimeout(10)  # 10 second timeout
         
         mail.send(msg)
         print(f"KYC notification email sent for user: {username}")
+    except socket.timeout:
+        print("Email sending timeout - continuing without email")
     except Exception as e:
         print(f"Error sending KYC notification email: {e}")
-
-def send_kyc_notification_email(user_email, username):
-    """Send email to admin about new KYC submission"""
-    try:
-        admin_emails = ["admin@bigwinners.com"]  # Add your admin emails
-        
-        msg = Message(
-            "New KYC Submission - Big Winners",
-            recipients=admin_emails,
-            sender=app.config["MAIL_DEFAULT_SENDER"]
-        )
-        
-        msg.html = f"""
-        <h3>New KYC Submission Received</h3>
-        <p><strong>User:</strong> {username}</p>
-        <p><strong>Email:</strong> {user_email}</p>
-        <p><strong>Submitted At:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
-        <p>Please review the KYC submission in the admin dashboard.</p>
-        <a href="{url_for('admin_kyc_review', _external=True)}" 
-           style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-           Review KYC Submissions
-        </a>
-        """
-        
-        mail.send(msg)
-    except Exception as e:
-        print(f"Error sending KYC notification email: {e}")
+        # Don't crash the app - just log the error
 
 @app.route("/admin/kyc_review")
 @admin_required
