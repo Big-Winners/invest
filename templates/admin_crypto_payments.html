@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Payments - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar .nav-link {
+            color: #333;
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            background-color: #e9ecef;
+        }
+        
+        .sidebar .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        
+        .main-content {
+            padding: 20px;
+        }
+        
+        .stat-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .crypto-badge {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+        }
+        
+        .crypto-badge-btc {
+            background-color: #f7931a;
+            color: white;
+        }
+        
+        .crypto-badge-erc20 {
+            background-color: #2775ca;
+            color: white;
+        }
+        
+        .crypto-badge-trc20 {
+            background-color: #ff6b01;
+            color: white;
+        }
+        
+        .payment-screenshot {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .payment-screenshot:hover {
+            transform: scale(1.1);
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+        
+        .modal-xl {
+            max-width: 90%;
+        }
+        
+        .action-buttons .btn {
+            margin-right: 5px;
+        }
+        
+        .country-flag {
+            width: 24px;
+            height: 16px;
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-2 d-md-block sidebar bg-white">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h4 class="text-primary">
+                            <i class="fas fa-shield-alt"></i> Admin Panel
+                        </h4>
+                        <p class="text-muted small">Big Winners Platform</p>
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_kyc_review') }}">
+                                <i class="fas fa-id-card"></i> KYC Reviews
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_pending_reviews') }}">
+                                <i class="fas fa-star"></i> User Reviews
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{{ url_for('admin_crypto_payments') }}">
+                                <i class="fab fa-bitcoin"></i> Crypto Payments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">
+                                <i class="fas fa-money-check-alt"></i> Manual Payments
+                            </a>
+                        </li>
+                        <li class="nav-item mt-4">
+                            <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <div class="mt-5 px-3">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">
+                                    <i class="fas fa-user-shield"></i> Admin User
+                                </h6>
+                                <p class="card-text small text-muted">
+                                    {{ session.get('user', 'Admin') }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-10 ms-sm-auto px-md-4 main-content">
+                <!-- Header -->
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4 border-bottom">
+                    <h1 class="h2">
+                        <i class="fab fa-bitcoin text-warning"></i> Crypto Payment Management
+                    </h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshPage()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-primary text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-clock"></i> Pending
+                                </h5>
+                                <h2>{{ pending_payments|length }}</h2>
+                                <p class="card-text">Awaiting Review</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-success text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-check-circle"></i> Approved
+                                </h5>
+                                <h2>{{ approved_payments|length }}</h2>
+                                <p class="card-text">Completed Payments</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-danger text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-times-circle"></i> Rejected
+                                </h5>
+                                <h2>0</h2>
+                                <p class="card-text">Failed Payments</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-info text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-coins"></i> Total Crypto
+                                </h5>
+                                <h2>
+                                    {% set total_amount = 0 %}
+                                    {% for payment in pending_payments + approved_payments %}
+                                        {% set total_amount = total_amount + payment.amount_usd %}
+                                    {% endfor %}
+                                    ${{ "%.2f"|format(total_amount) }}
+                                </h2>
+                                <p class="card-text">Total USD Value</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pending Payments Table -->
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-exclamation-circle"></i> Pending Crypto Payments
+                            <span class="badge bg-dark ms-2">{{ pending_payments|length }}</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if pending_payments %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>User Details</th>
+                                        <th>Payment Details</th>
+                                        <th>Screenshot</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in pending_payments %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>
+                                            <strong>{{ payment.username }}</strong><br>
+                                            <small class="text-muted">{{ payment.email }}</small><br>
+                                            <span class="badge bg-secondary">
+                                                {{ payment.country }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="mb-1">
+                                                <span class="badge 
+                                                    {% if payment.crypto_type == 'BTC' %}crypto-badge-btc
+                                                    {% elif payment.crypto_type == 'USDT_ERC20' %}crypto-badge-erc20
+                                                    {% else %}crypto-badge-trc20
+                                                    {% endif %} crypto-badge">
+                                                    {{ payment.crypto_type }}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <strong>${{ "%.2f"|format(payment.amount_usd) }}</strong> USD<br>
+                                                <small>Plan: {{ payment.plan|capitalize }}</small>
+                                            </div>
+                                            <div class="mt-1">
+                                                <small class="text-muted">
+                                                    Wallet: <code class="small">{{ payment.wallet_address[:15] }}...</code>
+                                                </small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary payment-screenshot" 
+                                                    onclick="viewScreenshot('{{ payment.screenshot_filename }}')">
+                                                <i class="fas fa-image"></i> View
+                                            </button>
+                                        </td>
+                                        <td>
+                                            {{ payment.created_at.strftime('%Y-%m-%d') }}<br>
+                                            <small class="text-muted">{{ payment.created_at.strftime('%H:%M') }}</small>
+                                        </td>
+                                        <td>
+                                            <div class="action-buttons">
+                                                <form method="POST" 
+                                                      action="{{ url_for('approve_crypto_payment', payment_id=payment._id) }}" 
+                                                      class="d-inline">
+                                                    <button type="submit" class="btn btn-sm btn-success" 
+                                                            onclick="return confirm('Approve this crypto payment?')">
+                                                        <i class="fas fa-check"></i> Approve
+                                                    </button>
+                                                </form>
+                                                <button class="btn btn-sm btn-danger" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#rejectModal{{ payment._id }}">
+                                                    <i class="fas fa-times"></i> Reject
+                                                </button>
+                                            </div>
+                                            
+                                            <!-- Reject Modal -->
+                                            <div class="modal fade" id="rejectModal{{ payment._id }}" tabindex="-1">
+                                                <div class="modal-dialog">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header bg-danger text-white">
+                                                            <h5 class="modal-title">
+                                                                <i class="fas fa-exclamation-triangle"></i> Reject Payment
+                                                            </h5>
+                                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <form method="POST" 
+                                                              action="{{ url_for('reject_crypto_payment', payment_id=payment._id) }}">
+                                                            <div class="modal-body">
+                                                                <p>Are you sure you want to reject this payment?</p>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label">Reason for rejection:</label>
+                                                                    <textarea class="form-control" name="notes" 
+                                                                              rows="3" 
+                                                                              placeholder="Optional: Enter reason for rejection"></textarea>
+                                                                </div>
+                                                            </div>
+                                                            <div class="modal-footer">
+                                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                                <button type="submit" class="btn btn-danger">Reject Payment</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                            <h4>No Pending Payments</h4>
+                            <p class="text-muted">All crypto payments have been reviewed.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Approved Payments Table -->
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-check-circle"></i> Approved Crypto Payments
+                            <span class="badge bg-light text-dark ms-2">{{ approved_payments|length }}</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if approved_payments %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>User</th>
+                                        <th>Crypto Type</th>
+                                        <th>Amount</th>
+                                        <th>Approved By</th>
+                                        <th>Date Approved</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in approved_payments %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>
+                                            {{ payment.username }}<br>
+                                            <small class="text-muted">{{ payment.email }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if payment.crypto_type == 'BTC' %}crypto-badge-btc
+                                                {% elif payment.crypto_type == 'USDT_ERC20' %}crypto-badge-erc20
+                                                {% else %}crypto-badge-trc20
+                                                {% endif %} crypto-badge">
+                                                {{ payment.crypto_type }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <strong>${{ "%.2f"|format(payment.amount_usd) }}</strong><br>
+                                            <small class="text-muted">{{ payment.plan|capitalize }} Plan</small>
+                                        </td>
+                                        <td>{{ payment.approved_by or 'Admin' }}</td>
+                                        <td>
+                                            {{ payment.approved_at.strftime('%Y-%m-%d') }}<br>
+                                            <small class="text-muted">{{ payment.approved_at.strftime('%H:%M') }}</small>
+                                        </td>
+                                        <td>
+                                            {% if payment.admin_notes %}
+                                            <span class="text-muted small">{{ payment.admin_notes[:50] }}{% if payment.admin_notes|length > 50 %}...{% endif %}</span>
+                                            {% else %}
+                                            <span class="text-muted small">No notes</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-file-invoice-dollar fa-3x text-muted mb-3"></i>
+                            <h4>No Approved Payments Yet</h4>
+                            <p class="text-muted">Approved crypto payments will appear here.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="mt-4">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Screenshot Modal -->
+    <div class="modal fade" id="screenshotModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-image"></i> Payment Screenshot
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="screenshotImage" src="" class="img-fluid rounded" 
+                         style="max-height: 70vh;" alt="Payment Screenshot">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <a id="downloadScreenshot" href="#" class="btn btn-primary" download>
+                        <i class="fas fa-download"></i> Download
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function refreshPage() {
+            window.location.reload();
+        }
+
+        function viewScreenshot(filename) {
+            if (!filename) {
+                alert('No screenshot available');
+                return;
+            }
+            
+            // Build the image URL
+            const imageUrl = "{{ url_for('crypto_image', filename='') }}" + filename;
+            
+            // Set image source
+            document.getElementById('screenshotImage').src = imageUrl;
+            
+            // Set download link
+            document.getElementById('downloadScreenshot').href = imageUrl;
+            document.getElementById('downloadScreenshot').download = filename;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('screenshotModal'));
+            modal.show();
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(function() {
+            // Check if any modal is open - don't refresh if modals are open
+            if (!document.querySelector('.modal.show')) {
+                refreshPage();
+            }
+        }, 30000);
+
+        // Handle form submissions with loading states
+        document.addEventListener('submit', function(e) {
+            if (e.target.closest('form[method="POST"]')) {
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+                    
+                    // Revert after 5 seconds if still on same page
+                    setTimeout(() => {
+                        if (submitBtn.disabled) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalText;
+                        }
+                    }, 5000);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

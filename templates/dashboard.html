@@ -193,6 +193,7 @@
                 updateInvestmentData();
                 setInterval(updateInvestmentData, 5000); // Update every 5 seconds
             });
+
         </script>
         <!-- Investment Section -->
         <div class="investment-section container mt-4 p-4 bg-light rounded shadow">
@@ -212,6 +213,13 @@
                     <i class="fas fa-money-check-alt"></i> Withdraw
                 </button>
             </div> 
+            {% if session.investment_status == 'pending_crypto_payment' %}
+<div class="alert alert-warning">
+    <h5><i class="fas fa-clock"></i> Payment Pending Approval</h5>
+    <p>Your crypto payment of {{ session.total_investment }} is awaiting admin approval.</p>
+    <p>This usually takes 24-48 hours. You will be notified once approved.</p>
+</div>
+{% endif %}
             <script>
                 // Function to update the investment status text
                 async function updateInvestmentData() {

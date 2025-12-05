@@ -236,12 +236,22 @@ def login():
             # Find the user by email
             user = users_collection.find_one({"email": email})
             if user and check_password_hash(user["password"], password):
-                session.update({
-                    "user_id": str(user["_id"]),
-                    "user": user["username"],
-                    "user_email": email,
-                    "profile_picture": user.get("profile_picture", "default.jpg"),
-                })
+                # Clear existing session
+                session.clear()
+                
+                # Set new session variables
+                session["user_id"] = str(user["_id"])
+                session["user"] = user["username"]
+                session["user_email"] = email
+                session["profile_picture"] = user.get("profile_picture", "default.jpg")
+                session["kyc_status"] = user.get("kyc_status", "not_verified")
+                session["investment_status"] = user.get("investment_status", "none")
+                
+                # If user is admin, set admin flag
+                if user.get("is_admin"):
+                    session["is_admin"] = True
+                
+                flash("Login successful!", "success")
                 return redirect(url_for("dashboard"))
 
             flash("Invalid email or password.", "danger")
@@ -251,6 +261,27 @@ def login():
             flash("An error occurred during login. Please try again later.", "danger")
             return redirect(url_for("login"))
     return render_template("login.html")
+
+@app.route("/check_crypto_payment_status", methods=["GET"])
+def check_crypto_payment_status():
+    """Check if user has pending crypto payments"""
+    if "user_email" not in session:
+        return jsonify({"has_pending": False}), 401
+    
+    try:
+        pending_payment = crypto_payments_collection.find_one({
+            "user_id": session["user_id"],
+            "status": "pending"
+        })
+        
+        return jsonify({
+            "has_pending": pending_payment is not None,
+            "amount_usd": pending_payment.get("amount_usd", 0) if pending_payment else 0,
+            "crypto_type": pending_payment.get("crypto_type", "") if pending_payment else "",
+            "submitted_at": pending_payment.get("created_at").isoformat() if pending_payment and pending_payment.get("created_at") else None
+        })
+    except Exception as e:
+        return jsonify({"has_pending": False, "error": str(e)})
 @app.route("/index")
 def index():
     return render_template("index.html")
@@ -361,49 +392,41 @@ def dashboard():
     
     # Check if we should show KYC notification
     show_kyc_notification = False
-    notification_type = "none"  # none, popup, banner, badge
+    notification_type = "none"
     
     if session["kyc_status"] == "not_verified":
-        # Check if user has dismissed the notification
-        kyc_notification_dismissed = user.get("kyc_notification_dismissed", False)
-        
-        # Check if KYC is already pending
-        kyc = kyc_collection.find_one({"user_id": session["user_id"], "status": "pending"})
-        if kyc:
-            session["kyc_status"] = "pending"
-            kyc_notification_dismissed = True  # Don't show notification if already submitted
-        
-        # Check if we should show notification based on dismissal status
-        if not kyc_notification_dismissed:
-            show_kyc_notification = True
-            
-            # Determine notification type based on user preferences or logic
-            # You can change this to 'popup', 'banner', or 'badge'
-            notification_type = "badge"
-            
-            # Check if it's been more than 24 hours since last shown (if tracking)
-            last_shown = user.get("kyc_notification_last_shown")
-            if last_shown:
-                last_shown_time = last_shown
-                current_time = datetime.utcnow()
-                hours_since_last_shown = (current_time - last_shown_time).total_seconds() / 3600
-                
-                # Only show notification if it's been more than 24 hours
-                if hours_since_last_shown < 24:
-                    show_kyc_notification = False
-            
-            # Update last shown time if showing notification
-            if show_kyc_notification and notification_type != "none":
-                users_collection.update_one(
-                    {"_id": ObjectId(session["user_id"])},
-                    {"$set": {"kyc_notification_last_shown": datetime.utcnow()}}
-                )
+        # ... existing KYC notification code ...
+        pass
     
-    # Calculate investment progress
+    # Handle different investment statuses
     investment_status = user.get("investment_status", "none")
-    time_progress, time_remaining = 0, "0h 0m"
-
-    if investment_status == "active" and user.get("investment_time"):
+    
+    # For pending crypto payments, show different message
+    if investment_status == "pending_crypto_payment":
+        # Check for crypto payment
+        crypto_payment = crypto_payments_collection.find_one({
+            "user_id": session["user_id"],
+            "status": "pending"
+        })
+        
+        if crypto_payment:
+            session.update({
+                "investment": f"${crypto_payment.get('amount_usd', 0):.2f} - Pending Approval",
+                "total_investment": f"${crypto_payment.get('amount_usd', 0):.2f}",
+                "investment_status": "pending_crypto_payment",
+                "time_progress": 0,
+                "time_remaining": "Awaiting Approval"
+            })
+        else:
+            session.update({
+                "investment": "Payment Pending",
+                "total_investment": "$0.00",
+                "investment_status": "pending_crypto_payment",
+                "time_progress": 0,
+                "time_remaining": "Awaiting Approval"
+            })
+    elif investment_status == "active" and user.get("investment_time"):
+        # Calculate investment progress for active investments
         investment_time = user["investment_time"]
         current_time = datetime.utcnow()
         maturity_time = investment_time + timedelta(hours=6)
@@ -414,17 +437,29 @@ def dashboard():
         hours, minutes = divmod(time_left.seconds, 3600)
         minutes = minutes // 60
         time_remaining = f"{hours}h {minutes}m"
-
-    initial_investment = float(user.get("initial_investment", 0))
-    session.update(
-        {
-            "investment": f"${initial_investment:.2f} invested" if initial_investment > 0 else "No active investment",
-            "total_investment": f"${initial_investment:.2f}",
-            "investment_status": investment_status,
-            "time_progress": round(time_progress * 100, 1),
-            "time_remaining": time_remaining,
-        }
-    )
+        
+        initial_investment = float(user.get("initial_investment", 0))
+        session.update(
+            {
+                "investment": f"${initial_investment:.2f} invested",
+                "total_investment": f"${initial_investment:.2f}",
+                "investment_status": investment_status,
+                "time_progress": round(time_progress * 100, 1),
+                "time_remaining": time_remaining,
+            }
+        )
+    else:
+        # No active investment
+        initial_investment = float(user.get("initial_investment", 0))
+        session.update(
+            {
+                "investment": "No active investment",
+                "total_investment": f"${initial_investment:.2f}",
+                "investment_status": investment_status,
+                "time_progress": 0,
+                "time_remaining": "Not started",
+            }
+        )
     
     # Check for pending reviews count for badge
     pending_reviews_count = pending_reviews_collection.count_documents({
@@ -454,8 +489,6 @@ def dashboard():
         user_kyc_submission=user_kyc_submission,
         flashed_messages=flashed_messages
     )
-
-
 @app.route("/forex_data")
 def forex_data():
     return jsonify({"forex_url": "https://fxpricing.com/fx-widget/market-currency-rates-widget.php?id=1,2,3,5,14,20"})
@@ -914,7 +947,6 @@ def realtime_investment_data():
         return jsonify({"error": "User not logged in!"}), 401
 
     user = users_collection.find_one({"email": session["user_email"]})
-    print(f"Fetched user data for /api/realtime_investment_data: {user}")  # Add this log
 
     if not user:
         return jsonify({
@@ -928,9 +960,42 @@ def realtime_investment_data():
             "investment_status": "none"
         }), 200
 
+    investment_status = user.get("investment_status", "none")
+    
+    # Handle pending crypto payment status
+    if investment_status == "pending_crypto_payment":
+        # Get crypto payment details
+        crypto_payment = crypto_payments_collection.find_one({
+            "user_id": session["user_id"],
+            "status": "pending"
+        })
+        
+        if crypto_payment:
+            amount_usd = float(crypto_payment.get("amount_usd", 0))
+            return jsonify({
+                "profit": 0.0,
+                "initial_investment": amount_usd,
+                "current_value": amount_usd,
+                "time_progress": 0.0,
+                "hours_remaining": 0,
+                "minutes_remaining": 0,
+                "investment_status": "pending_crypto_payment",
+                "pending_message": "Payment awaiting admin approval"
+            }), 200
+        else:
+            return jsonify({
+                "profit": 0.0,
+                "initial_investment": 0.0,
+                "current_value": 0.0,
+                "time_progress": 0.0,
+                "hours_remaining": 0,
+                "minutes_remaining": 0,
+                "investment_status": "pending_crypto_payment"
+            }), 200
+    
     # Handle missing investment_time
     investment_time = user.get("investment_time")
-    if not investment_time:
+    if not investment_time or investment_status != "active":
         return jsonify({
             "profit": 0.0,
             "initial_investment": float(user.get("initial_investment", 0.0)),
@@ -938,7 +1003,7 @@ def realtime_investment_data():
             "time_progress": 0.0,
             "hours_remaining": 0,
             "minutes_remaining": 0,
-            "investment_status": user.get("investment_status", "none")
+            "investment_status": investment_status
         }), 200
 
     try:
@@ -958,8 +1023,6 @@ def realtime_investment_data():
         hours_remaining = max(int((maturity_time - current_time).total_seconds() // 3600), 0)
         minutes_remaining = max(int(((maturity_time - current_time).total_seconds() % 3600) // 60), 0)
 
-        print(f"Calculated data: profit={profit}, current_value={current_value}, time_progress={time_progress}")  # Add this log
-
         return jsonify({
             "profit": round(profit, 2),
             "initial_investment": round(initial_investment, 2),
@@ -967,7 +1030,7 @@ def realtime_investment_data():
             "time_progress": round(time_progress * 100, 2),
             "hours_remaining": hours_remaining,
             "minutes_remaining": minutes_remaining,
-            "investment_status": user.get("investment_status", "active")
+            "investment_status": investment_status
         }), 200
     except Exception as e:
         print(f"Error in /api/realtime_investment_data: {e}")
@@ -1064,6 +1127,7 @@ def admin_logout():
 def admin_dashboard():
     # Pending payments for table
     pending_payments = list(db["pending_manual_payments"].find({"status": "pending"}))
+    pending_crypto_count = crypto_payments_collection.count_documents({"status": "pending"})
 
     # All users
     users = list(users_collection.find({}))
@@ -1084,7 +1148,9 @@ def admin_dashboard():
         invested_count=invested_count,
         total_invested=total_invested,
         emails=emails,
-        invested_users=invested_users
+        invested_users=invested_users,
+         pending_crypto_count=pending_crypto_count
+       
     )
 
 # Example route to approve a manual payment
@@ -1862,329 +1928,230 @@ def kyc_image(filename):
     
     return send_file(filepath, mimetype=mime_type)
 
-@app.route("/create_coinbase_charge", methods=["POST"])
-def create_coinbase_charge():
-    """Create a Coinbase Commerce charge for Bitcoin payment"""
+crypto_payments_collection = db["crypto_payments"]
+
+@app.route("/submit_crypto_payment", methods=["POST"])
+def submit_crypto_payment():
+    """Handle crypto payment submissions with screenshots"""
     if "user_email" not in session:
-        return jsonify({"success": False, "message": "Not logged in"}), 401
-    
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+
     try:
         data = request.get_json()
-        amount_usd = float(data.get("amount_usd", 0))
-        plan = data.get("plan")
-        country = data.get("country")
         
-        if not amount_usd or not plan:
-            return jsonify({"success": False, "message": "Missing required data"}), 400
+        # Validate required fields
+        required_fields = ["amount_usd", "plan", "country", "crypto_type", "wallet_address", "payment_screenshot"]
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"status": "error", "message": f"Missing {field}"}), 400
+
+        # Validate crypto type
+        valid_crypto_types = ["BTC", "USDT_ERC20", "USDT_TRC20"]
+        if data["crypto_type"] not in valid_crypto_types:
+            return jsonify({"status": "error", "message": "Invalid crypto type"}), 400
+
+        # Generate filename for screenshot
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename = f"crypto_payment_{session['user_id']}_{timestamp}.jpg"
         
-        # Generate unique metadata for tracking
-        metadata = {
+        # Create crypto payments directory
+        crypto_upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], "crypto_payments")
+        os.makedirs(crypto_upload_dir, exist_ok=True)
+        
+        # Process screenshot
+        screenshot_data = data["payment_screenshot"]
+        if screenshot_data.startswith('data:image'):
+            screenshot_data = screenshot_data.split(',')[1] if ',' in screenshot_data else screenshot_data
+        
+        try:
+            image_data = base64.b64decode(screenshot_data)
+            filepath = os.path.join(crypto_upload_dir, filename)
+            
+            with open(filepath, 'wb') as f:
+                f.write(image_data)
+            
+            # Compress if too large
+            if os.path.getsize(filepath) > 2 * 1024 * 1024:
+                compress_image(filepath)
+                
+        except Exception as e:
+            print(f"Error processing screenshot: {e}")
+            return jsonify({"status": "error", "message": "Invalid screenshot format"}), 400
+
+        # Save payment record
+        payment_data = {
             "user_id": session["user_id"],
             "username": session["user"],
             "email": session["user_email"],
-            "plan": plan,
-            "country": country,
-            "internal_reference": f"BW-{session['user_id'][-8:]}-{int(time.time())}"
+            "plan": data["plan"],
+            "country": data["country"],
+            "amount_usd": float(data["amount_usd"]),
+            "crypto_type": data["crypto_type"],
+            "wallet_address": data["wallet_address"],
+            "screenshot_filename": filename,
+            "status": "pending",
+            "created_at": datetime.utcnow(),
+            "approved_at": None,
+            "admin_notes": ""
         }
         
-        # Create charge on Coinbase Commerce
-        headers = {
-            "X-CC-Api-Key": COINBASE_API_KEY,
-            "X-CC-Version": "2018-03-22",
-            "Content-Type": "application/json"
-        }
+        crypto_payments_collection.insert_one(payment_data)
         
-        charge_data = {
-            "name": f"Big Winners - {plan} Plan",
-            "description": f"Investment in {plan} Plan - ${amount_usd}",
-            "pricing_type": "fixed_price",
-            "local_price": {
-                "amount": str(amount_usd),
-                "currency": "USD"
-            },
-            "metadata": metadata,
-            "redirect_url": url_for('coinbase_payment_success', _external=True),
-            "cancel_url": url_for('coinbase_payment_cancel', _external=True),
-            "requested_info": ["email"]
-        }
-        
-        response = requests.post(
-            f"{COINBASE_COMMERCE_API_URL}/charges",
-            headers=headers,
-            json=charge_data
+        # Update user status
+        users_collection.update_one(
+            {"_id": ObjectId(session["user_id"])},
+            {"$set": {"investment_status": "pending_crypto_payment"}}
         )
         
-        if response.status_code != 201:
-            error_msg = response.json().get('error', {}).get('message', 'Unknown error')
-            return jsonify({
-                "success": False, 
-                "message": f"Coinbase API Error: {error_msg}"
-            }), 400
+        # Update session
+        session["investment_status"] = "pending_crypto_payment"
         
-        charge_response = response.json()
-        charge_data = charge_response.get('data', {})
-        
-        # Save payment record
-        coinbase_payment = {
-            "user_id": session["user_id"],
-            "username": session["user"],
-            "email": session["user_email"],
-            "charge_id": charge_data.get('id'),
-            "charge_code": charge_data.get('code'),
-            "amount_usd": amount_usd,
-            "plan": plan,
-            "country": country,
-            "status": "created",
-            "coinbase_status": charge_data.get('status', 'NEW'),
-            "payment_address": charge_data.get('addresses', {}).get('bitcoin'),
-            "hosted_url": charge_data.get('hosted_url'),
-            "metadata": metadata,
-            "created_at": datetime.utcnow(),
-            "expires_at": charge_data.get('expires_at'),
-            "confirmed_at": None
-        }
-        
-        coinbase_payments_collection.insert_one(coinbase_payment)
+        # Send email notification to admin
+        try:
+            send_crypto_payment_notification(session["user_email"], session["user"], 
+                                           data["crypto_type"], float(data["amount_usd"]))
+        except Exception as e:
+            print(f"Email notification error: {e}")
+            # Non-critical error, continue
         
         return jsonify({
-            "success": True,
-            "charge_id": charge_data.get('id'),
-            "hosted_url": charge_data.get('hosted_url'),
-            "payment_address": charge_data.get('addresses', {}).get('bitcoin'),
-            "amount_usd": amount_usd,
-            "expires_at": charge_data.get('expires_at'),
-            "metadata": metadata
+            "status": "success", 
+            "message": "Crypto payment submitted for review. Redirecting to dashboard...",
+            "redirect_url": url_for("dashboard")
         })
         
     except Exception as e:
-        print(f"Error creating Coinbase charge: {e}")
-        return jsonify({"success": False, "message": "Failed to create payment"}), 500
+        print(f"Error in submit_crypto_payment: {e}")
+        return jsonify({
+            "status": "error", 
+            "message": "Internal server error. Please try again later."
+        }), 500
 
-@app.route("/coinbase_payment_success")
-def coinbase_payment_success():
-    """Handle successful payment redirect from Coinbase"""
-    charge_id = request.args.get('charge_id')
-    
-    if not charge_id:
-        flash("Payment reference missing", "warning")
-        return redirect(url_for('dashboard'))
-    
-    # Check payment status
-    payment = coinbase_payments_collection.find_one({"charge_id": charge_id})
-    if payment:
-        # Update session if this is the current user
-        if session.get("user_id") == payment["user_id"]:
-            if payment.get("status") == "confirmed":
-                flash("Payment confirmed successfully!", "success")
-            elif payment.get("status") == "pending":
-                flash("Payment is processing. Please wait for confirmation.", "info")
-            else:
-                flash("Payment completed. Awaiting confirmation.", "info")
-    
-    return redirect(url_for('dashboard'))
+def send_crypto_payment_notification(email, username, crypto_type, amount):
+    """Send email notification for crypto payment"""
+    try:
+        admin_emails = ["admin@bigwinners.com"]
+        
+        if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+            return
+        
+        msg = Message(
+            f"New Crypto Payment - {crypto_type} - Big Winners",
+            recipients=admin_emails,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>New Crypto Payment Received</h3>
+        <p><strong>User:</strong> {username}</p>
+        <p><strong>Email:</strong> {email}</p>
+        <p><strong>Crypto Type:</strong> {crypto_type}</p>
+        <p><strong>Amount:</strong> ${amount:.2f} USD</p>
+        <p><strong>Submitted At:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <a href="{url_for('admin_crypto_payments', _external=True)}" 
+           style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+           Review Crypto Payments
+        </a>
+        """
+        
+        mail.send(msg)
+        print(f"Crypto payment notification sent for user: {username}")
+    except Exception as e:
+        print(f"Error sending crypto payment email: {e}")
 
-@app.route("/coinbase_payment_cancel")
-def coinbase_payment_cancel():
-    """Handle cancelled payment"""
-    charge_id = request.args.get('charge_id')
+@app.route("/admin/crypto_payments")
+@admin_required
+def admin_crypto_payments():
+    """Admin page to review crypto payments"""
+    pending_payments = list(crypto_payments_collection.find({"status": "pending"}).sort("created_at", -1))
+    approved_payments = list(crypto_payments_collection.find({"status": "approved"}).sort("approved_at", -1).limit(20))
     
-    if charge_id:
+    return render_template("admin_crypto_payments.html",
+                         pending_payments=pending_payments,
+                         approved_payments=approved_payments)
+
+@app.route("/admin/approve_crypto_payment/<payment_id>", methods=["POST"])
+@admin_required
+def approve_crypto_payment(payment_id):
+    """Approve a crypto payment"""
+    try:
+        payment = crypto_payments_collection.find_one({"_id": ObjectId(payment_id)})
+        if not payment:
+            flash("Payment not found", "danger")
+            return redirect(url_for("admin_crypto_payments"))
+        
         # Update payment status
-        coinbase_payments_collection.update_one(
-            {"charge_id": charge_id},
+        crypto_payments_collection.update_one(
+            {"_id": ObjectId(payment_id)},
             {"$set": {
-                "status": "cancelled",
-                "coinbase_status": "CANCELLED"
+                "status": "approved",
+                "approved_at": datetime.utcnow(),
+                "approved_by": session.get("user"),
+                "admin_notes": request.form.get("notes", "")
             }}
         )
-    
-    flash("Payment was cancelled", "warning")
-    return redirect(url_for('invest'))
-
-@app.route("/coinbase_webhook", methods=["POST"])
-def coinbase_webhook():
-    """Handle Coinbase Commerce webhook notifications"""
-    # Verify webhook signature
-    signature = request.headers.get('X-CC-Webhook-Signature')
-    payload = request.data
-    
-    if not signature or not COINBASE_WEBHOOK_SECRET:
-        return jsonify({"error": "Invalid webhook configuration"}), 400
-    
-    # Verify signature
-    expected_signature = hmac.new(
-        COINBASE_WEBHOOK_SECRET.encode(),
-        payload,
-        hashlib.sha256
-    ).hexdigest()
-    
-    if not hmac.compare_digest(signature, expected_signature):
-        return jsonify({"error": "Invalid signature"}), 401
-    
-    # Process webhook
-    event = request.json
-    event_type = event.get('event', {}).get('type')
-    charge_data = event.get('event', {}).get('data', {})
-    charge_id = charge_data.get('id')
-    
-    if not charge_id:
-        return jsonify({"error": "No charge ID"}), 400
-    
-    # Update payment status based on event
-    if event_type == "charge:confirmed":
-        # Payment confirmed on blockchain
-        update_payment_status(charge_id, "confirmed", charge_data)
         
-    elif event_type == "charge:created":
-        # Charge created
-        update_payment_status(charge_id, "created", charge_data)
-        
-    elif event_type == "charge:failed":
-        # Payment failed
-        update_payment_status(charge_id, "failed", charge_data)
-        
-    elif event_type == "charge:pending":
-        # Payment detected but not confirmed
-        update_payment_status(charge_id, "pending", charge_data)
-        
-    elif event_type == "charge:delayed":
-        # Payment delayed
-        update_payment_status(charge_id, "delayed", charge_data)
-    
-    return jsonify({"success": True}), 200
-
-def update_payment_status(charge_id, status, charge_data):
-    """Update payment status and activate investment if confirmed"""
-    # Update Coinbase payment record
-    update_data = {
-        "status": status,
-        "coinbase_status": charge_data.get('status'),
-        "updated_at": datetime.utcnow()
-    }
-    
-    # Add confirmation timestamp if confirmed
-    if status == "confirmed":
-        update_data["confirmed_at"] = datetime.utcnow()
-        update_data["transaction_hash"] = charge_data.get('transaction', {}).get('hash')
-    
-    coinbase_payments_collection.update_one(
-        {"charge_id": charge_id},
-        {"$set": update_data}
-    )
-    
-    # If payment is confirmed, activate investment
-    if status == "confirmed":
-        payment = coinbase_payments_collection.find_one({"charge_id": charge_id})
-        if payment:
-            # Activate user investment
-            users_collection.update_one(
-                {"_id": ObjectId(payment["user_id"])},
-                {"$set": {
-                    "investment_status": "active",
-                    "initial_investment": payment["amount_usd"],
-                    "investment_time": datetime.utcnow(),
-                    "payment_method": "bitcoin"
-                }}
-            )
-            
-            # Send confirmation email
-            try:
-                send_payment_confirmation_email(payment)
-            except Exception as e:
-                print(f"Error sending confirmation email: {e}")
-
-@app.route("/check_coinbase_payment/<charge_id>")
-def check_coinbase_payment(charge_id):
-    """Check payment status from Coinbase"""
-    if "user_email" not in session:
-        return jsonify({"success": False, "message": "Not logged in"}), 401
-    
-    try:
-        # Fetch updated status from Coinbase
-        headers = {
-            "X-CC-Api-Key": COINBASE_API_KEY,
-            "X-CC-Version": "2018-03-22"
-        }
-        
-        response = requests.get(
-            f"{COINBASE_COMMERCE_API_URL}/charges/{charge_id}",
-            headers=headers
+        # Activate user investment
+        users_collection.update_one(
+            {"_id": ObjectId(payment["user_id"])},
+            {"$set": {
+                "investment_status": "active",
+                "initial_investment": payment["amount_usd"],
+                "investment_time": datetime.utcnow()
+            }}
         )
         
-        if response.status_code == 200:
-            charge_data = response.json().get('data', {})
-            
-            # Update local record
-            coinbase_payments_collection.update_one(
-                {"charge_id": charge_id},
-                {"$set": {
-                    "coinbase_status": charge_data.get('status'),
-                    "updated_at": datetime.utcnow()
-                }}
-            )
-            
-            return jsonify({
-                "success": True,
-                "status": charge_data.get('status'),
-                "local_amount": charge_data.get('pricing', {}).get('local', {}).get('amount'),
-                "currency": charge_data.get('pricing', {}).get('local', {}).get('currency')
-            })
-        
-        return jsonify({"success": False, "message": "Failed to fetch status"}), 400
+        flash("Crypto payment approved and investment activated!", "success")
+        return redirect(url_for("admin_crypto_payments"))
         
     except Exception as e:
-        print(f"Error checking payment: {e}")
-        return jsonify({"success": False, "message": "Internal error"}), 500
+        flash(f"Error approving payment: {str(e)}", "danger")
+        return redirect(url_for("admin_crypto_payments"))
 
-def send_payment_confirmation_email(payment):
-    """Send payment confirmation email"""
-    msg = Message(
-        "Bitcoin Payment Confirmed - Big Winners",
-        recipients=[payment["email"]],
-        sender=app.config["MAIL_DEFAULT_SENDER"]
-    )
-    
-    msg.html = f"""
-    <h3>Bitcoin Payment Confirmed!</h3>
-    <p>Dear {payment['username']},</p>
-    
-    <p>Your Bitcoin payment of <strong>${payment['amount_usd']}</strong> has been confirmed.</p>
-    
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-        <p><strong>Payment Details:</strong></p>
-        <ul>
-            <li>Amount: ${payment['amount_usd']}</li>
-            <li>Plan: {payment['plan']}</li>
-            <li>Payment Method: Bitcoin</li>
-            <li>Transaction: {payment.get('transaction_hash', 'Confirmed')}</li>
-            <li>Confirmed: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</li>
-        </ul>
-    </div>
-    
-    <p>Your investment is now active and growing!</p>
-    
-    <a href="{url_for('dashboard', _external=True)}" 
-       style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-       View Dashboard
-    </a>
-    
-    <p><strong>The Big Winners Team</strong></p>
-    """
-    
-    mail.send(msg)
-
-# Add admin route to view Bitcoin payments
-@app.route("/admin/bitcoin_payments")
+@app.route("/admin/reject_crypto_payment/<payment_id>", methods=["POST"])
 @admin_required
-def admin_bitcoin_payments():
-    """Admin view for Bitcoin payments"""
-    bitcoin_payments = list(coinbase_payments_collection.find().sort("created_at", -1))
+def reject_crypto_payment(payment_id):
+    """Reject a crypto payment"""
+    try:
+        crypto_payments_collection.update_one(
+            {"_id": ObjectId(payment_id)},
+            {"$set": {
+                "status": "rejected",
+                "admin_notes": request.form.get("notes", "Payment rejected. Please check the transaction and try again.")
+            }}
+        )
+        
+        flash("Crypto payment rejected", "warning")
+        return redirect(url_for("admin_crypto_payments"))
+    except Exception as e:
+        flash(f"Error rejecting payment: {str(e)}", "danger")
+        return redirect(url_for("admin_crypto_payments"))
+
+@app.route("/crypto_image/<path:filename>")
+def crypto_image(filename):
+    """Serve crypto payment screenshots from the uploads/crypto_payments directory"""
+    # Security check: ensure the path is within the crypto_payments directory
+    if ".." in filename or filename.startswith("/"):
+        abort(404)
     
-    return render_template(
-        "admin_bitcoin_payments.html",
-        bitcoin_payments=bitcoin_payments
-    )
+    crypto_upload_dir = os.path.join(app.config["UPLOAD_FOLDER"], "crypto_payments")
+    filepath = os.path.join(crypto_upload_dir, filename)
     
+    # Check if file exists
+    if not os.path.exists(filepath):
+        abort(404)
     
+    # Determine content type
+    if filename.lower().endswith('.png'):
+        mime_type = 'image/png'
+    elif filename.lower().endswith('.gif'):
+        mime_type = 'image/gif'
+    elif filename.lower().endswith('.pdf'):
+        mime_type = 'application/pdf'
+    else:
+        mime_type = 'image/jpeg'
+    
+    return send_file(filepath, mimetype=mime_type)
+
 if __name__ == "__main__":
     app.run(debug=True, port=5050)

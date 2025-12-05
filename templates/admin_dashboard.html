@@ -140,7 +140,21 @@
         </div>
     </div>
 </div>
-
+<!-- Add this card to the dashboard -->
+<div class="col-md-3">
+    <div class="card bg-dark text-white">
+        <div class="card-body">
+            <h5 class="card-title">
+                <i class="fab fa-bitcoin"></i> Crypto Payments
+            </h5>
+            <h2>{{ pending_crypto_count }}</h2>
+            <p class="card-text">Pending review</p>
+            <a href="{{ url_for('admin_crypto_payments') }}" class="btn btn-outline-light">
+                View All
+            </a>
+        </div>
+    </div>
+</div>
     <div class="container mb-5">
         <h2 class="mb-4"><i class="fas fa-money-check-alt"></i> Pending Manual Payments</h2>
         {% with messages = get_flashed_messages(with_categories=true) %}
