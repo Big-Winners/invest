@@ -1,6 +1,6 @@
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pymongo
 import random
 import string
@@ -9,11 +9,15 @@ import uuid
 import hashlib
 import time
 import json
+import paypalrestsdk
+import paypalhttp
 import hmac
 from decimal import Decimal
 from datetime import datetime
 from pymongo import MongoClient
 import requests
+import paypalrestsdk
+import json
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify, flash, get_flashed_messages
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -66,10 +70,7 @@ def kyc_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Coinbase Commerce Configuration
-COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")
-COINBASE_WEBHOOK_SECRET = os.getenv("COINBASE_WEBHOOK_SECRET", "")  # Set this in your .env file
-COINBASE_COMMERCE_API_URL = "https://api.commerce.coinbase.com"
+
 
 # Configuration
 MONGO_URI = os.getenv("MONGO_URI")
@@ -91,6 +92,7 @@ try:
     db = client["investment_app"]
     users_collection = db["users"]
     coinbase_payments_collection = db["coinbase_payments"]
+    paypal_payments_collection = db["paypal_payments"]
 except pymongo.errors.ConnectionFailure as e:
     print(f"MongoDB Connection Error: {e}")
     exit(1)
@@ -131,6 +133,20 @@ email_config = {
 email_config = {k: v for k, v in email_config.items() if v is not None}
 app.config.update(email_config)
 mail = Mail(app)
+
+# PayPal Configuration 
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "live")
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID")
+PAYPAL_MERCHANT_EMAIL = os.getenv("PAYPAL_MERCHANT_EMAIL", "mugokaruirua@gmail.com")  
+
+# Initialize PayPal SDK
+paypalrestsdk.configure({
+    "mode": PAYPAL_MODE,
+    "client_id": PAYPAL_CLIENT_ID,
+    "client_secret": PAYPAL_CLIENT_SECRET
+})
 # Helper Functions
 def generate_reset_token(email):
     serializer = URLSafeTimedSerializer(app.secret_key)
@@ -428,7 +444,7 @@ def dashboard():
     elif investment_status == "active" and user.get("investment_time"):
         # Calculate investment progress for active investments
         investment_time = user["investment_time"]
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
         elapsed_time = (current_time - investment_time).total_seconds()
         total_duration = timedelta(hours=6).total_seconds()
@@ -686,7 +702,7 @@ def paystack_callback():
 
             # Proceed with updates
             amount_usd = float(metadata.get("amount_usd", 0))
-            investment_time = datetime.utcnow()
+            investment_time = datetime.now(timezone.utc)
             update_data = {
                 "initial_investment": amount_usd,
                 "investment_time": investment_time,
@@ -780,7 +796,7 @@ def check_withdrawal():
         return jsonify({"error": "No investment found!"}), 400
 
     investment_time = user["investment_time"]
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     maturity_time = investment_time + timedelta(hours=6)
     time_remaining = maturity_time - current_time
 
@@ -816,7 +832,7 @@ def process_withdrawal():
             return jsonify({"error": "No investment found!"}), 400
 
         investment_time = user["investment_time"]
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
         
         if current_time < maturity_time:
@@ -904,7 +920,7 @@ def withdrawal_callback():
                 {"_id": user_id},
                 {"$set": {
                     "investment_status": "completed",
-                    "withdrawal_time": datetime.utcnow()
+                    "withdrawal_time": datetime.now(timezone.utc)
                 }}
             )
 
@@ -1010,7 +1026,7 @@ def realtime_investment_data():
         # Calculate investment progress
         investment_time = user["investment_time"]
         initial_investment = float(user.get("initial_investment", 0.0))
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
 
         elapsed_time = (current_time - investment_time).total_seconds()
@@ -1058,7 +1074,7 @@ def manual_payment_notice():
         "local_amount": local_amount,
         "transaction_id": transaction_id,  # <-- NEW
         "status": "pending",
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
     db["pending_manual_payments"].insert_one(pending)
 
@@ -1166,13 +1182,13 @@ def approve_payment(payment_id):
         {"$set": {
             "investment_status": "active",
             "initial_investment": payment["amount_usd"],
-            "investment_time": datetime.utcnow()
+            "investment_time": datetime.now(timezone.utc)
         }}
     )
     # Mark payment as approved
     db["pending_manual_payments"].update_one(
         {"_id": ObjectId(payment_id)},
-        {"$set": {"status": "approved", "approved_at": datetime.utcnow()}}
+        {"$set": {"status": "approved", "approved_at": datetime.now(timezone.utc)}}
     )
     flash("Payment approved and investment activated!", "success")
     return redirect(url_for("admin_dashboard"))
@@ -1214,7 +1230,7 @@ def submit_review():
             "rating": rating,
             "review_text": review_text,
             "status": "pending",
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         pending_reviews_collection.insert_one(review_data)
@@ -1286,7 +1302,7 @@ def approve_review(review_id):
         # Move to approved reviews collection
         approved_review = review.copy()
         approved_review["status"] = "approved"
-        approved_review["approved_at"] = datetime.utcnow()
+        approved_review["approved_at"] = datetime.now(timezone.utc)
         
         reviews_collection.insert_one(approved_review)
         pending_reviews_collection.delete_one({"_id": ObjectId(review_id)})
@@ -1322,7 +1338,7 @@ def dismiss_kyc_notification():
             {"_id": ObjectId(session["user_id"])},
             {"$set": {
                 "kyc_notification_dismissed": True,
-                "kyc_notification_dismissed_at": datetime.utcnow()
+                "kyc_notification_dismissed_at": datetime.now(timezone.utc)
             }}
         )
         
@@ -1429,7 +1445,7 @@ def kyc_verification():
         {"_id": ObjectId(session["user_id"])},
         {"$set": {
             "kyc_notification_dismissed": True,
-            "kyc_notification_last_shown": datetime.utcnow()
+            "kyc_notification_last_shown": datetime.now(timezone.utc)
         }}
     )
     session["kyc_notification_dismissed"] = True
@@ -1472,7 +1488,7 @@ def submit_kyc():
         user_id = session["user_id"]
         username = session["user"]
         email = session["user_email"]
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         
         # ========== FILE PREPARATION PHASE ==========
         # Create KYC uploads directory if it doesn't exist
@@ -1561,7 +1577,7 @@ def submit_kyc():
             "back_id_data": data["back_id"],
             "face_image_data": data["face_image"],
             "status": "pending",
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
             "reviewed_at": None,
             "reviewed_by": None,
             "notes": "",
@@ -1599,7 +1615,7 @@ def submit_kyc():
             {"_id": ObjectId(user_id)},
             {"$set": {
                 "kyc_status": "pending",
-                "kyc_submitted_at": datetime.utcnow(),
+                "kyc_submitted_at": datetime.now(timezone.utc),
                 "kyc_notification_dismissed": True
             }}
         )
@@ -1694,7 +1710,7 @@ def send_kyc_notification_email(user_email, username):
         <h3>New KYC Submission Received</h3>
         <p><strong>User:</strong> {username}</p>
         <p><strong>Email:</strong> {user_email}</p>
-        <p><strong>Submitted At:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p><strong>Submitted At:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
         <p>Please review the KYC submission in the admin dashboard.</p>
         <a href="{url_for('admin_kyc_review', _external=True)}" 
            style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
@@ -1786,7 +1802,7 @@ def approve_kyc(kyc_id):
             {"_id": ObjectId(kyc_id)},
             {"$set": {
                 "status": "approved",
-                "reviewed_at": datetime.utcnow(),
+                "reviewed_at": datetime.now(timezone.utc),
                 "reviewed_by": session.get("user"),
                 "notes": request.form.get("notes", "")
             }}
@@ -1826,7 +1842,7 @@ def reject_kyc(kyc_id):
             {"_id": ObjectId(kyc_id)},
             {"$set": {
                 "status": "rejected",
-                "reviewed_at": datetime.utcnow(),
+                "reviewed_at": datetime.now(timezone.utc),
                 "reviewed_by": session.get("user"),
                 "notes": request.form.get("notes", "KYC rejected. Please ensure documents are clear and match your identity.")
             }}
@@ -1951,7 +1967,7 @@ def submit_crypto_payment():
             return jsonify({"status": "error", "message": "Invalid crypto type"}), 400
 
         # Generate filename for screenshot
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"crypto_payment_{session['user_id']}_{timestamp}.jpg"
         
         # Create crypto payments directory
@@ -1990,7 +2006,7 @@ def submit_crypto_payment():
             "wallet_address": data["wallet_address"],
             "screenshot_filename": filename,
             "status": "pending",
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
             "approved_at": None,
             "admin_notes": ""
         }
@@ -2047,7 +2063,7 @@ def send_crypto_payment_notification(email, username, crypto_type, amount):
         <p><strong>Email:</strong> {email}</p>
         <p><strong>Crypto Type:</strong> {crypto_type}</p>
         <p><strong>Amount:</strong> ${amount:.2f} USD</p>
-        <p><strong>Submitted At:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p><strong>Submitted At:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
         <a href="{url_for('admin_crypto_payments', _external=True)}" 
            style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
            Review Crypto Payments
@@ -2085,7 +2101,7 @@ def approve_crypto_payment(payment_id):
             {"_id": ObjectId(payment_id)},
             {"$set": {
                 "status": "approved",
-                "approved_at": datetime.utcnow(),
+                "approved_at": datetime.now(timezone.utc),
                 "approved_by": session.get("user"),
                 "admin_notes": request.form.get("notes", "")
             }}
@@ -2097,7 +2113,7 @@ def approve_crypto_payment(payment_id):
             {"$set": {
                 "investment_status": "active",
                 "initial_investment": payment["amount_usd"],
-                "investment_time": datetime.utcnow()
+                "investment_time": datetime.now(timezone.utc)
             }}
         )
         
@@ -2152,6 +2168,587 @@ def crypto_image(filename):
         mime_type = 'image/jpeg'
     
     return send_file(filepath, mimetype=mime_type)
+
+@app.route("/create_paypal_order", methods=["POST"])
+def create_paypal_order():
+    """Create a PayPal order for payment with proper merchant configuration"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        amount_usd = float(data.get("amount_usd", 0))
+        plan = data.get("plan", "unknown")
+        country = data.get("country", "")
+        
+        if amount_usd <= 0:
+            return jsonify({"status": "error", "message": "Invalid amount"}), 400
+        
+        # Generate unique order ID
+        order_id = f"BW{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
+        
+        # Get merchant email from environment or use default
+        merchant_email = os.getenv("PAYPAL_MERCHANT_EMAIL", "")
+        
+        # Create PayPal payment with payee information
+        payment_data = {
+            "intent": "sale",
+            "payer": {
+                "payment_method": "paypal"
+            },
+            "redirect_urls": {
+                "return_url": url_for('paypal_success', _external=True),
+                "cancel_url": url_for('paypal_cancel', _external=True)
+            },
+            "transactions": [{
+                "amount": {
+                    "total": str(round(amount_usd, 2)),
+                    "currency": "USD"
+                },
+                "description": f"Big Winners Investment - {plan} Plan",
+                "custom": json.dumps({
+                    "user_id": session["user_id"],
+                    "plan": plan,
+                    "country": country,
+                    "order_id": order_id
+                }),
+                "invoice_number": order_id,
+                "item_list": {
+                    "items": [{
+                        "name": f"{plan.capitalize()} Plan Investment",
+                        "sku": f"BW-{plan.upper()}",
+                        "price": str(round(amount_usd, 2)),
+                        "currency": "USD",
+                        "quantity": 1
+                    }]
+                }
+            }]
+        }
+        
+        # Add payee information if merchant email is available
+        if merchant_email:
+            payment_data["transactions"][0]["payee"] = {
+                "email": merchant_email
+            }
+        
+        try:
+            payment = paypalrestsdk.Payment(payment_data)
+            
+            if payment.create():
+                # Save payment to database
+                paypal_payments_collection.insert_one({
+                    "user_id": session["user_id"],
+                    "email": session["user_email"],
+                    "username": session.get("user", ""),
+                    "plan": plan,
+                    "country": country,
+                    "amount_usd": amount_usd,
+                    "order_id": order_id,
+                    "paypal_payment_id": payment.id,
+                    "merchant_email": merchant_email,
+                    "status": "created",
+                    "created_at": datetime.now(timezone.utc),
+                    "paypal_links": [link.to_dict() for link in payment.links]
+                })
+                
+                # Find approval URL
+                approval_url = None
+                for link in payment.links:
+                    if link.rel == "approval_url":
+                        approval_url = link.href
+                        break
+                
+                return jsonify({
+                    "status": "success",
+                    "payment_id": payment.id,
+                    "approval_url": approval_url,
+                    "order_id": order_id
+                })
+            else:
+                print(f"PayPal payment creation error: {payment.error}")
+                return jsonify({"status": "error", "message": f"Payment creation failed: {payment.error}"}), 400
+                
+        except Exception as paypal_error:
+            print(f"PayPal SDK error: {paypal_error}")
+            return jsonify({
+                "status": "error", 
+                "message": f"PayPal service error: {str(paypal_error)}"
+            }), 503
+        
+    except Exception as e:
+        print(f"Error creating PayPal order: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+@app.route("/process_card_payment", methods=["POST"])
+def process_card_payment():
+    """Process card payment with PayPal - Fixed version"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        
+        # Debug: Print received data (remove in production)
+        print(f"Card payment data received: {data}")
+        
+        # Get card details from the request
+        card_details = {
+            "type": data.get("card_type", "visa").lower(),
+            "number": data.get("card_number", "").replace(" ", ""),
+            "expire_month": data.get("expire_month", ""),
+            "expire_year": data.get("expire_year", ""),
+            "cvv2": data.get("cvv", ""),
+            "first_name": data.get("first_name", ""),
+            "last_name": data.get("last_name", "")
+        }
+        
+        print(f"Card details: {card_details['type']}, Last 4: {card_details['number'][-4:] if card_details['number'] else 'N/A'}")
+        
+        # Validate card details
+        validation_errors = []
+        if not card_details["number"]:
+            validation_errors.append("Card number is required")
+        if len(card_details["number"]) not in [13, 14, 15, 16]:
+            validation_errors.append("Invalid card number length")
+        if not card_details["expire_month"] or not card_details["expire_year"]:
+            validation_errors.append("Expiry date is required")
+        if not card_details["cvv2"]:
+            validation_errors.append("CVV is required")
+        
+        if validation_errors:
+            return jsonify({
+                "status": "error", 
+                "message": "Invalid card details: " + ", ".join(validation_errors)
+            }), 400
+        
+        amount_usd = float(data.get("amount_usd", 0))
+        plan = data.get("plan", "unknown")
+        email = data.get("email", session["user_email"])
+        
+        if amount_usd <= 0:
+            return jsonify({"status": "error", "message": "Invalid amount"}), 400
+        
+        # Get merchant email
+        merchant_email = os.getenv("PAYPAL_MERCHANT_EMAIL", "")
+        
+        if not merchant_email:
+            print("ERROR: PAYPAL_MERCHANT_EMAIL not set in environment")
+            return jsonify({
+                "status": "error", 
+                "message": "Payment processor configuration error. Please try another payment method or contact support."
+            }), 400
+        
+        # Generate unique order ID
+        order_id = f"BW_CARD_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
+        
+        print(f"Creating PayPal payment for ${amount_usd}, Order ID: {order_id}")
+        
+        # Create PayPal payment with card
+        payment_data = {
+            "intent": "sale",
+            "payer": {
+                "payment_method": "credit_card",
+                "funding_instruments": [{
+                    "credit_card": {
+                        "type": card_details["type"],
+                        "number": card_details["number"],
+                        "expire_month": card_details["expire_month"],
+                        "expire_year": card_details["expire_year"],
+                        "cvv2": card_details["cvv2"],
+                        "first_name": card_details["first_name"] or "Customer",
+                        "last_name": card_details["last_name"] or "Customer",
+                        "billing_address": {
+                            "line1": "123 Main St",
+                            "city": "San Jose",
+                            "state": "CA",
+                            "postal_code": "95131",
+                            "country_code": "US"
+                        }
+                    }
+                }]
+            },
+            "transactions": [{
+                "amount": {
+                    "total": str(round(amount_usd, 2)),
+                    "currency": "USD"
+                },
+                "description": f"Big Winners {plan.capitalize()} Plan Investment",
+                "invoice_number": order_id,
+                "payee": {
+                    "email": merchant_email
+                }
+            }]
+        }
+        
+        print(f"Payment data prepared, merchant email: {merchant_email}")
+        
+        try:
+            payment = paypalrestsdk.Payment(payment_data)
+            
+            if payment.create():
+                print(f"PayPal payment created successfully: {payment.id}")
+                
+                # Execute payment
+                if payment.execute({"payer_id": payment.payer.payer_info.payer_id}):
+                    print(f"Payment executed successfully: {payment.id}")
+                    
+                    # Save to database
+                    paypal_payments_collection.insert_one({
+                        "user_id": session["user_id"],
+                        "email": session["user_email"],
+                        "username": session.get("user", ""),
+                        "plan": plan,
+                        "amount_usd": amount_usd,
+                        "order_id": order_id,
+                        "paypal_payment_id": payment.id,
+                        "merchant_email": merchant_email,
+                        "status": "completed",
+                        "payment_type": "card",
+                        "card_last4": card_details["number"][-4:],
+                        "card_type": card_details["type"],
+                        "created_at": datetime.now(timezone.utc),
+                        "completed_at": datetime.now(timezone.utc),
+                        "transaction_id": payment.transactions[0].related_resources[0].sale.id if payment.transactions[0].related_resources else "N/A"
+                    })
+                    
+                    # Update user investment
+                    users_collection.update_one(
+                        {"_id": ObjectId(session["user_id"])},
+                        {"$set": {
+                            "investment_status": "active",
+                            "initial_investment": amount_usd,
+                            "investment_time": datetime.now(timezone.utc)
+                        }}
+                    )
+                    
+                    # Update session
+                    session.update({
+                        "investment": f"${amount_usd:.2f} invested",
+                        "total_investment": f"${amount_usd:.2f}",
+                        "investment_status": "active"
+                    })
+                    
+                    # Send confirmation email
+                    try:
+                        transaction_id = payment.transactions[0].related_resources[0].sale.id if payment.transactions[0].related_resources else order_id
+                        send_payment_confirmation_email(
+                            email,
+                            session["user"],
+                            amount_usd,
+                            plan,
+                            transaction_id,
+                            "card"
+                        )
+                    except Exception as email_error:
+                        print(f"Email error (non-critical): {email_error}")
+                    
+                    return jsonify({
+                        "status": "success",
+                        "message": "Payment successful! Your investment is now active.",
+                        "transaction_id": transaction_id,
+                        "amount_usd": amount_usd,
+                        "plan": plan
+                    })
+                else:
+                    print(f"Payment execution failed: {payment.error}")
+                    return jsonify({
+                        "status": "error", 
+                        "message": f"Payment failed: {payment.error.get('message', 'Unknown error')}"
+                    }), 400
+            else:
+                print(f"Payment creation failed: {payment.error}")
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Payment creation failed: {payment.error.get('message', 'Unknown error')}"
+                }), 400
+                
+        except Exception as paypal_error:
+            print(f"PayPal processing exception: {paypal_error}")
+            return jsonify({
+                "status": "error", 
+                "message": f"Payment processing error: {str(paypal_error)}"
+            }), 400
+            
+    except Exception as e:
+        print(f"General error in process_card_payment: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error", 
+            "message": f"Payment processing error: {str(e)}"
+        }), 500
+    
+@app.route("/check_paypal_config", methods=["GET"])
+def check_paypal_config():
+    """Check if PayPal is properly configured"""
+    config_status = {
+        "client_id_configured": bool(PAYPAL_CLIENT_ID),
+        "client_secret_configured": bool(PAYPAL_CLIENT_SECRET),
+        "mode": PAYPAL_MODE,
+        "sdk_version": paypalrestsdk.__version__ if 'paypalrestsdk' in locals() else "Not loaded"
+    }
+    
+    return jsonify(config_status)
+
+
+@app.route("/paypal/success")
+def paypal_success():
+    """Handle successful PayPal payment return"""
+    try:
+        payment_id = request.args.get('paymentId')
+        payer_id = request.args.get('PayerID')
+        
+        if not payment_id or not payer_id:
+            flash("Payment information missing", "error")
+            return redirect(url_for("dashboard"))
+        
+        # Execute the payment
+        payment = paypalrestsdk.Payment.find(payment_id)
+        
+        if payment.execute({"payer_id": payer_id}):
+            # Update payment status in database
+            payment_data = paypal_payments_collection.find_one({"paypal_payment_id": payment_id})
+            
+            if payment_data:
+                # Get transaction details
+                transaction = payment.transactions[0]
+                amount_usd = float(transaction.amount.total)
+                
+                # Update payment record
+                paypal_payments_collection.update_one(
+                    {"paypal_payment_id": payment_id},
+                    {"$set": {
+                        "status": "completed",
+                        "payer_id": payer_id,
+                        "completed_at": datetime.now(timezone.utc),
+                        "transaction_details": transaction.to_dict()
+                    }}
+                )
+                
+                # Update user investment
+                users_collection.update_one(
+                    {"_id": ObjectId(payment_data["user_id"])},
+                    {"$set": {
+                        "investment_status": "active",
+                        "initial_investment": amount_usd,
+                        "investment_time": datetime.now(timezone.utc)
+                    }}
+                )
+                
+                # Update session if this is the current user
+                if session.get("user_id") == payment_data["user_id"]:
+                    session.update({
+                        "investment": f"${amount_usd:.2f} invested",
+                        "total_investment": f"${amount_usd:.2f}",
+                        "investment_status": "active"
+                    })
+                
+                flash("Payment successful! Your investment is now active.", "success")
+                
+                # Send confirmation email
+                try:
+                    send_payment_confirmation_email(
+                        payment_data["email"],
+                        payment_data["username"],
+                        amount_usd,
+                        payment_data["plan"]
+                    )
+                except Exception as email_error:
+                    print(f"Email error: {email_error}")
+                
+            else:
+                flash("Payment completed but record not found", "warning")
+            
+            return redirect(url_for("dashboard"))
+        else:
+            flash(f"Payment execution failed: {payment.error}", "error")
+            return redirect(url_for("invest"))
+            
+    except Exception as e:
+        print(f"Error in paypal_success: {e}")
+        flash("Payment processing error", "error")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/paypal/cancel")
+def paypal_cancel():
+    """Handle cancelled PayPal payment"""
+    flash("Payment was cancelled", "warning")
+    return redirect(url_for("invest"))
+
+
+@app.route("/paypal/webhook", methods=["POST"])
+def paypal_webhook():
+    """Handle PayPal webhook events"""
+    try:
+        # Get webhook event
+        body = request.get_data(as_text=True)
+        event_body = json.loads(body)
+        
+        # Verify webhook signature (simplified - in production use proper verification)
+        event_type = event_body.get('event_type', '')
+        resource = event_body.get('resource', {})
+        
+        if event_type == 'PAYMENT.SALE.COMPLETED':
+            # Handle completed payment
+            payment_id = resource.get('parent_payment')
+            if payment_id:
+                # Update payment status
+                paypal_payments_collection.update_one(
+                    {"paypal_payment_id": payment_id},
+                    {"$set": {
+                        "status": "webhook_confirmed",
+                        "webhook_received_at": datetime.now(timezone.utc)
+                    }}
+                )
+        
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        print(f"PayPal webhook error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def send_payment_confirmation_email(email, username, amount, plan):
+    """Send payment confirmation email"""
+    try:
+        msg = Message(
+            "Payment Confirmation - Big Winners",
+            recipients=[email],
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>Payment Confirmed!</h3>
+        <p>Dear {username},</p>
+        <p>Your payment of <strong>${amount:.2f} USD</strong> for the <strong>{plan.capitalize()} Plan</strong> has been successfully processed.</p>
+        <p>Your investment is now active and will start earning returns immediately.</p>
+        <p>You can track your investment progress in your dashboard.</p>
+        <p><strong>Thank you for investing with Big Winners!</strong></p>
+        <p><em>The Big Winners Team</em></p>
+        """
+        
+        mail.send(msg)
+        print(f"Payment confirmation email sent to {email}")
+    except Exception as e:
+        print(f"Error sending payment confirmation email: {e}")
+
+
+@app.route("/check_paypal_payment_status/<payment_id>", methods=["GET"])
+def check_paypal_payment_status(payment_id):
+    """Check the status of a PayPal payment"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        # Check in our database
+        payment = paypal_payments_collection.find_one({
+            "paypal_payment_id": payment_id,
+            "user_id": session["user_id"]
+        })
+        
+        if not payment:
+            return jsonify({"status": "error", "message": "Payment not found"}), 404
+        
+        return jsonify({
+            "status": "success",
+            "payment_status": payment.get("status", "unknown"),
+            "amount_usd": payment.get("amount_usd", 0),
+            "order_id": payment.get("order_id", "")
+        })
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+@app.route("/create_paypal_card_order", methods=["POST"])
+def create_paypal_card_order():
+    """Create a PayPal order specifically for card payments"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        amount_usd = float(data.get("amount_usd", 0))
+        plan = data.get("plan", "unknown")
+        country = data.get("country", "")
+        
+        if amount_usd <= 0:
+            return jsonify({"status": "error", "message": "Invalid amount"}), 400
+        
+        # Generate unique order ID
+        order_id = f"BW_CARD_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
+        
+        # Create PayPal payment for card processing
+        payment = paypalrestsdk.Payment({
+            "intent": "sale",
+            "payer": {
+                "payment_method": "credit_card",
+                "funding_instruments": [{
+                    "credit_card": {
+                        "type": "visa",  # This will be overridden by actual card data
+                        "number": "4111111111111111",  # Placeholder - will be replaced by JS
+                        "expire_month": "11",
+                        "expire_year": "2028",
+                        "cvv2": "123",
+                        "first_name": "John",
+                        "last_name": "Doe"
+                    }
+                }]
+            },
+            "transactions": [{
+                "amount": {
+                    "total": str(round(amount_usd, 2)),
+                    "currency": "USD"
+                },
+                "description": f"Big Winners Investment - {plan} Plan - Card Payment",
+                "custom": json.dumps({
+                    "user_id": session["user_id"],
+                    "plan": plan,
+                    "country": country,
+                    "order_id": order_id,
+                    "payment_type": "card"
+                }),
+                "invoice_number": order_id,
+                "item_list": {
+                    "items": [{
+                        "name": f"{plan.capitalize()} Plan Investment",
+                        "sku": f"BW-{plan.upper()}-CARD",
+                        "price": str(round(amount_usd, 2)),
+                        "currency": "USD",
+                        "quantity": 1
+                    }]
+                }
+            }]
+        })
+        
+        if payment.create():
+            # Save payment to database
+            paypal_payments_collection.insert_one({
+                "user_id": session["user_id"],
+                "email": session["user_email"],
+                "username": session.get("user", ""),
+                "plan": plan,
+                "country": country,
+                "amount_usd": amount_usd,
+                "order_id": order_id,
+                "paypal_payment_id": payment.id,
+                "status": "created",
+                "payment_type": "card",
+                "created_at": datetime.now(timezone.utc)
+            })
+            
+            return jsonify({
+                "status": "success",
+                "payment_id": payment.id,
+                "order_id": order_id
+            })
+        else:
+            return jsonify({"status": "error", "message": payment.error}), 400
+        
+    except Exception as e:
+        print(f"Error creating PayPal card order: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5050)
