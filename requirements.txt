@@ -28,3 +28,5 @@ gevent==24.11.1
 # Development
 blinker==1.9.0
 gunicorn>=21.2
+
+paypalrestsdk
