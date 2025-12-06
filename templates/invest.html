@@ -9,9 +9,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='invest.css') }}">
     <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
-    <!-- Load PayPal SDK for both PayPal and Card payments -->
-    <script src="https://www.paypal.com/sdk/js?client-id={{ config.get('PAYPAL_CLIENT_ID', '') }}&currency=USD&disable-funding=venmo&components=buttons,hosted-fields"></script>
-    <script src="https://js.paystack.co/v1/inline.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -199,193 +196,55 @@
             color: #ff6b01;
         }
 
-        .paypal-button-container {
-            margin: 20px 0;
-            min-height: 150px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .paypal-processing {
-            text-align: center;
-            padding: 20px;
-        }
-
-        .paypal-logo {
-            color: #003087;
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-
-        .payment-method-icon {
-            font-size: 1.5rem;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-        
-        .paypal-direct-btn {
-            background: linear-gradient(90deg, #003087 0%, #009cde 100%);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.2rem;
+        .card-options .payment-option-card {
+            border: 2px solid #dee2e6;
             border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .paypal-direct-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-        
-        .paypal-direct-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .card-payment-btn {
-            background: linear-gradient(90deg, #1a1a1a 0%, #333333 100%);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.2rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .card-payment-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-        
-        .card-payment-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .payment-options-tabs {
-            margin-top: 20px;
-        }
-        
-        .payment-options-tabs .nav-link {
-            color: #6c757d;
-            font-weight: 500;
-            border: 1px solid #dee2e6;
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            margin-right: 5px;
-        }
-        
-        .payment-options-tabs .nav-link.active {
-            color: #0d6efd;
-            background-color: #fff;
-            border-color: #dee2e6;
-        }
-        
-        .payment-options-content {
-            border: 1px solid #dee2e6;
-            border-radius: 0 8px 8px 8px;
-            padding: 20px;
-            background: #fff;
-        }
-        
-        .card-icons {
-            font-size: 1.8rem;
-            margin: 10px 0;
-        }
-        
-        .card-icons i {
-            margin-right: 10px;
-        }
-        
-        .paypal-option, .card-option {
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .paypal-option {
-            background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%);
-            border: 2px solid #003087;
-        }
-        
-        .card-option {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border: 2px solid #1a1a1a;
-        }
-        
-        .manual-country-instructions {
-            display: none;
-        }
-        
-        .card-payment-form {
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border: 1px solid #dee2e6;
-        }
-        
-        .payment-success {
-            text-align: center;
-            padding: 40px 20px;
-        }
-        
-        .payment-success i {
-            font-size: 4rem;
-            color: #28a745;
-            margin-bottom: 20px;
-        }
-        
-        .payment-failed {
-            text-align: center;
-            padding: 40px 20px;
-        }
-        
-        .payment-failed i {
-            font-size: 4rem;
-            color: #dc3545;
-            margin-bottom: 20px;
-        }
-        
-        .paypal-sdk-error {
-            background-color: #fff3cd;
-            border: 1px solid #ffeaa7;
-            color: #856404;
             padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
         }
-        
-        .simple-card-form .form-control {
-            height: 45px;
-            padding: 10px 15px;
-            font-size: 16px;
+
+        .card-options .payment-option-card:hover {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
         }
-        
-        .simple-card-form label {
-            font-weight: 500;
-            margin-bottom: 5px;
+
+        .card-options .payment-option-card.selected {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
         }
-        
-        .card-type-indicator {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 1.5rem;
+
+        .payment-icon {
+            font-size: 24px;
+            margin-right: 10px;
+            color: #0d6efd;
         }
-        
-        .form-group-relative {
-            position: relative;
+
+        .card-icons {
+            font-size: 30px;
+            margin-right: 10px;
+        }
+
+        .card-icons.visa {
+            color: #1a1f71;
+        }
+
+        .card-icons.mastercard {
+            color: #eb001b;
+        }
+
+        .card-icons.amex {
+            color: #2e77bc;
+        }
+
+        .payment-option-card i.fa-check-circle {
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .payment-option-card.selected i.fa-check-circle {
+            opacity: 1;
         }
     </style>
 </head>
@@ -415,7 +274,7 @@
                 <p><i class="fas fa-envelope"></i> <strong>Email:</strong> {{ session.get('user_email', 'Not available') }}</p>
             </div>
 
-            <!-- Investment Plans -->
+            <!-- Subscription Plans -->
             <h3><i class="fas fa-file-contract"></i> Investment Plans</h3>
             <ul style="list-style: none; padding-left: 0;">
                 <li><i class="fas fa-check text-success"></i> <a href="/invest" style="text-decoration: none;">Standard Plan</a></li>
@@ -437,7 +296,7 @@
         <h2 class="text-center text-primary mb-4"><i class="fas fa-money-check-alt"></i> Select Your Investment Plan</h2>
         <p class="text-center text-muted mb-4">Choose between our premium investment plans</p>
 
-        <!-- Investment Plan Buttons -->
+        <!-- Investment Plan Buttons (Only Standard and VIP) -->
         <div class="plan-buttons text-center mb-5">
             <button class="btn btn-primary btn-lg" onclick="showPlan('standard')">
                 <i class="fas fa-star"></i> Standard Plan
@@ -495,6 +354,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.7/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://js.paystack.co/v1/inline.js"></script>
     
     <script>
         // Crypto wallet addresses
@@ -516,25 +376,13 @@
             "USDT_TRC20": "fas fa-coins"
         };
 
-        // Countries with manual payment support
-        const MANUAL_PAYMENT_COUNTRIES = ["Kenya", "Uganda", "Tanzania", "Rwanda", "Zambia", "South Sudan"];
-
         // Store global variables
         let selectedPlan = '';
         let selectedAmountUSD = 0;
         let selectedCountry = '';
         let selectedCryptoType = '';
-        let selectedPaymentMethod = ''; // 'crypto', 'paypal', 'card', or 'manual'
-        let currentPayPalPaymentId = '';
-        let paypalSDKAvailable = false;
-
-        // Check if PayPal SDK is loaded
-        if (typeof paypal !== 'undefined') {
-            paypalSDKAvailable = true;
-            console.log('PayPal SDK loaded successfully');
-        } else {
-            console.log('PayPal SDK not loaded');
-        }
+        let selectedPaymentMethod = ''; // 'crypto', 'card', or 'manual'
+        let selectedCardMethod = 'paystack';
 
         // Menu functions
         function toggleMenu() {
@@ -583,8 +431,6 @@
             document.getElementById('paymentCountry').textContent = country;
             document.getElementById('paymentAmountUSD').textContent = usdAmount;
             document.getElementById('paymentPlan').textContent = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
-            document.getElementById('paymentAmountUSD2').textContent = usdAmount;
-            document.getElementById('paymentAmountUSD3').textContent = usdAmount;
             
             // Clear previous content
             const cryptoOptionsDiv = document.getElementById('cryptoOptions');
@@ -622,13 +468,30 @@
                 cryptoOptionsDiv.appendChild(optionDiv);
             }
             
-            // Show manual tab only for supported countries
-            const manualTab = document.getElementById('manual-tab');
-            if (MANUAL_PAYMENT_COUNTRIES.includes(country)) {
-                manualTab.style.display = 'block';
+            // Determine manual payment instructions
+            let manualInstructions = '';
+            if (country === "Kenya") {
+                manualInstructions = `
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-mobile-alt"></i> MPesa Payment (Kenya Only)</h6>
+                        <p>Pay with MPesa through Paystack. You'll be redirected to a secure payment page.</p>
+                        <p><strong>Amount:</strong> KES equivalent of $${usdAmount}</p>
+                    </div>
+                `;
             } else {
-                manualTab.style.display = 'none';
+                // Get local currency info
+                let toCurrency = getLocalCurrency(country);
+                manualInstructions = `
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-university"></i> Bank Transfer / Mobile Money</h6>
+                        <p>Complete payment through your local bank or mobile money service.</p>
+                        <p><strong>Amount:</strong> Local currency equivalent of $${usdAmount}</p>
+                        <div id="manualInstructionsContent"></div>
+                    </div>
+                `;
             }
+            
+            document.getElementById('manualPaymentContent').innerHTML = manualInstructions;
             
             // Show payment method modal
             const paymentMethodModal = new bootstrap.Modal(document.getElementById('paymentMethodModal'));
@@ -642,7 +505,7 @@
         function setupPaymentMethodTabs(country, usdAmount, plan) {
             // Clear previous listeners
             document.getElementById('proceedCryptoBtn').onclick = null;
-            document.getElementById('proceedPaypalBtn').onclick = null;
+            document.getElementById('proceedCardBtn').onclick = null;
             document.getElementById('proceedManualBtn').onclick = null;
             
             // Crypto tab click handler
@@ -653,28 +516,26 @@
                 showCryptoPaymentModal(country, usdAmount, plan);
             };
             
-            // PayPal & Card tab click handler
-            document.getElementById('proceedPaypalBtn').onclick = function() {
-                selectedPaymentMethod = 'paypal';
+            // Card tab click handler
+            document.getElementById('proceedCardBtn').onclick = function() {
+                selectedPaymentMethod = 'card';
                 const modal = bootstrap.Modal.getInstance(document.getElementById('paymentMethodModal'));
                 modal.hide();
-                showPayPalCardPaymentModal(country, usdAmount, plan);
+                processCardPayment(country, usdAmount, plan);
             };
             
-            // Manual tab click handler (only for supported countries)
-            if (MANUAL_PAYMENT_COUNTRIES.includes(country)) {
-                document.getElementById('proceedManualBtn').onclick = function() {
-                    selectedPaymentMethod = 'manual';
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('paymentMethodModal'));
-                    modal.hide();
-                    
-                    if (country === "Kenya") {
-                        convertAndPayWithPaystack(plan);
-                    } else {
-                        showManualPayment(country, usdAmount, plan);
-                    }
-                };
-            }
+            // Manual tab click handler
+            document.getElementById('proceedManualBtn').onclick = function() {
+                selectedPaymentMethod = 'manual';
+                const modal = bootstrap.Modal.getInstance(document.getElementById('paymentMethodModal'));
+                modal.hide();
+                
+                if (country === "Kenya") {
+                    convertAndPayWithPaystack(plan);
+                } else {
+                    showManualPayment(country, usdAmount, plan);
+                }
+            };
             
             // Add copy functionality
             setTimeout(() => {
@@ -693,496 +554,23 @@
             }, 100);
         }
 
-        // Show PayPal & Card payment modal
-        async function showPayPalCardPaymentModal(country, usdAmount, plan) {
-            // Update modal content
-            document.getElementById('paypalModalCountry').textContent = country;
-            document.getElementById('paypalModalAmount').textContent = usdAmount;
-            document.getElementById('paypalModalPlan').textContent = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
-            
-            // Clear previous content
-            document.getElementById('paypalButtonContainer').innerHTML = '';
-            document.getElementById('paypalProcessing').style.display = 'none';
-            
-            // Show PayPal modal
-            const paypalModal = new bootstrap.Modal(document.getElementById('paypalPaymentModal'));
-            paypalModal.show();
-            
-            // Create PayPal payment order for both PayPal and Card payments
-            await createPayPalPaymentOrder(country, usdAmount, plan);
-        }
-
-        // Create PayPal payment order
-        async function createPayPalPaymentOrder(country, usdAmount, plan) {
-            const paypalButtonContainer = document.getElementById('paypalButtonContainer');
-            paypalButtonContainer.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Creating payment options...</p></div>';
-            
-            try {
-                // Create PayPal order via backend
-                const response = await fetch('/create_paypal_order', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        amount_usd: usdAmount,
-                        plan: plan,
-                        country: country
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    currentPayPalPaymentId = data.payment_id;
-                    
-                    // Show both PayPal and Card payment options
-                    let paypalOptionsHTML = `
-                        <div class="payment-options">
-                            <!-- PayPal Option -->
-                            <div class="paypal-option">
-                                <h5><i class="fab fa-paypal text-primary"></i> PayPal Account</h5>
-                                <p>Pay with your PayPal account or link your card to PayPal.</p>
-                                <div class="alert alert-info">
-                                    <p><strong>Fast & Secure:</strong> Pay with your existing PayPal balance or linked cards</p>
-                                </div>
-                                <button type="button" class="paypal-direct-btn" onclick="redirectToPayPal('${data.approval_url}')">
-                                    <i class="fab fa-paypal"></i> Pay with PayPal Account
-                                </button>
-                            </div>`;
-                    
-                    // Add card option based on PayPal SDK availability
-                    if (paypalSDKAvailable) {
-                        paypalOptionsHTML += `
-                            <!-- Credit/Debit Card Option (PayPal Hosted Fields) -->
-                            <div class="card-option">
-                                <h5><i class="fas fa-credit-card"></i> Credit/Debit Card</h5>
-                                <p>Pay directly with your card (no PayPal account required).</p>
-                                <div class="card-icons">
-                                    <i class="fab fa-cc-visa text-primary" title="Visa"></i>
-                                    <i class="fab fa-cc-mastercard text-danger" title="Mastercard"></i>
-                                    <i class="fab fa-cc-amex text-info" title="American Express"></i>
-                                    <i class="fab fa-cc-discover text-warning" title="Discover"></i>
-                                </div>
-                                <div class="alert alert-info">
-                                    <p><strong>Direct Payment:</strong> Enter your card details securely</p>
-                                    <p><strong>No Account Needed:</strong> Don't need a PayPal account</p>
-                                </div>
-                                <button class="card-payment-btn" onclick="showCardPaymentForm('${data.payment_id}')">
-                                    <i class="fas fa-credit-card"></i> Pay with Credit/Debit Card
-                                </button>
-                            </div>`;
-                    } else {
-                        // Show simple card form as fallback
-                        paypalOptionsHTML += `
-                            <!-- Credit/Debit Card Option (Simple Form) -->
-                            <div class="card-option">
-                                <h5><i class="fas fa-credit-card"></i> Credit/Debit Card</h5>
-                                <p>Pay directly with your card using our secure payment form.</p>
-                                <div class="card-icons">
-                                    <i class="fab fa-cc-visa text-primary" title="Visa"></i>
-                                    <i class="fab fa-cc-mastercard text-danger" title="Mastercard"></i>
-                                    <i class="fab fa-cc-amex text-info" title="American Express"></i>
-                                    <i class="fab fa-cc-discover text-warning" title="Discover"></i>
-                                </div>
-                                <div class="alert alert-info">
-                                    <p><strong>Direct Payment:</strong> Enter your card details securely</p>
-                                    <p><strong>No Account Needed:</strong> Don't need a PayPal account</p>
-                                </div>
-                                <button class="card-payment-btn" onclick="showSimpleCardForm('${data.payment_id}')">
-                                    <i class="fas fa-credit-card"></i> Pay with Credit/Debit Card
-                                </button>
-                            </div>
-                            <div class="paypal-sdk-error mt-2">
-                                <small><i class="fas fa-info-circle"></i> Using secure direct payment processing</small>
-                            </div>`;
-                    }
-                    
-                    paypalOptionsHTML += `
-                            <!-- Payment Details -->
-                            <div class="alert alert-light mt-3">
-                                <h6><i class="fas fa-info-circle"></i> Payment Details</h6>
-                                <p><strong>Amount:</strong> $${usdAmount} USD</p>
-                                <p><strong>Plan:</strong> ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan</p>
-                                <p><strong>Country:</strong> ${country}</p>
-                                <p><strong>Payment ID:</strong> ${data.payment_id.substring(0, 12)}...</p>
-                            </div>
-                        </div>`;
-                    
-                    paypalButtonContainer.innerHTML = paypalOptionsHTML;
-                } else {
-                    paypalButtonContainer.innerHTML = `
-                        <div class="alert alert-danger">
-                            <h5><i class="fas fa-exclamation-triangle"></i> Payment Issue</h5>
-                            <p>${data.message || 'Unable to process payment at this time.'}</p>
-                            <p>Please try:</p>
-                            <ol>
-                                <li>Using Cryptocurrency payment (available worldwide)</li>
-                                <li>Contacting support for assistance</li>
-                                <li>Trying again in a few minutes</li>
-                            </ol>
-                        </div>
-                        <div class="text-center mt-3">
-                            <button class="btn btn-outline-primary btn-lg" onclick="createPayPalPaymentOrder('${country}', ${usdAmount}, '${plan}')">
-                                <i class="fas fa-redo"></i> Try Again
-                            </button>
-                            <button class="btn btn-primary btn-lg ms-2" onclick="showAlternativePaymentMethods()">
-                                <i class="fas fa-exchange-alt"></i> Other Payment Methods
-                            </button>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                paypalButtonContainer.innerHTML = `
-                    <div class="alert alert-danger">
-                        <h5><i class="fas fa-exclamation-triangle"></i> Connection Error</h5>
-                        <p>Unable to connect to payment server.</p>
-                        <p>Error: ${error.message}</p>
-                    </div>
-                    <div class="text-center mt-3">
-                        <button class="btn btn-outline-primary btn-lg" onclick="createPayPalPaymentOrder('${country}', ${usdAmount}, '${plan}')">
-                            <i class="fas fa-redo"></i> Try Again
-                        </button>
-                    </div>
-                `;
-            }
-        }
-
-        // Show PayPal Hosted Fields card form
-        function showCardPaymentForm(paymentId) {
-            const paypalButtonContainer = document.getElementById('paypalButtonContainer');
-            
-            paypalButtonContainer.innerHTML = `
-                <div class="card-payment-form">
-                    <h5><i class="fas fa-credit-card"></i> Card Details</h5>
-                    <p>Enter your card information securely</p>
-                    
-                    <div id="card-container" style="margin: 20px 0;">
-                        <!-- Card fields will be loaded here by PayPal -->
-                        <div class="mb-3">
-                            <label for="cardholder-name" class="form-label">Cardholder Name</label>
-                            <input type="text" class="form-control" id="cardholder-name" placeholder="John Doe" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="card-number" class="form-label">Card Number</label>
-                            <div id="card-number" class="form-control" style="height: 45px;"></div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="expiration-date" class="form-label">Expiration Date</label>
-                                <div id="expiration-date" class="form-control" style="height: 45px;"></div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="cvv" class="form-label">CVV</label>
-                                <div id="cvv" class="form-control" style="height: 45px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div id="card-errors" class="alert alert-danger" style="display: none;"></div>
-                    
-                    <div class="text-center mt-4">
-                        <button id="card-submit-btn" class="btn btn-primary btn-lg" style="padding: 15px 40px;">
-                            <i class="fas fa-lock"></i> Pay $${selectedAmountUSD} USD
-                        </button>
-                        <button class="btn btn-outline-secondary btn-lg ms-2" onclick="createPayPalPaymentOrder('${selectedCountry}', ${selectedAmountUSD}, '${selectedPlan}')">
-                            <i class="fas fa-arrow-left"></i> Back to Options
-                        </button>
-                    </div>
-                    
-                    <div class="alert alert-info mt-3">
-                        <p><small><i class="fas fa-shield-alt"></i> Your card details are processed securely by PayPal. We never store your card information.</small></p>
-                    </div>
-                </div>
-            `;
-            
-            // Initialize PayPal card fields if SDK is loaded
-            if (paypalSDKAvailable && paypal.HostedFields) {
-                initializeCardFields(paymentId);
-            } else {
-                document.getElementById('card-errors').innerHTML = 'Card payment is not available at the moment. Please use PayPal account payment instead.';
-                document.getElementById('card-errors').style.display = 'block';
-            }
-        }
-
-        // Initialize PayPal card fields
-        function initializeCardFields(paymentId) {
-            paypal.HostedFields.render({
-                createOrder: function() {
-                    return paymentId; // Use the already created payment ID
-                },
-                styles: {
-                    '.valid': {
-                        'color': 'green'
-                    },
-                    '.invalid': {
-                        'color': 'red'
-                    }
-                },
-                fields: {
-                    number: {
-                        selector: "#card-number",
-                        placeholder: "4111 1111 1111 1111"
-                    },
-                    cvv: {
-                        selector: "#cvv",
-                        placeholder: "123"
-                    },
-                    expirationDate: {
-                        selector: "#expiration-date",
-                        placeholder: "MM/YY"
-                    }
-                }
-            }).then(function(hf) {
-                document.querySelector("#card-submit-btn").addEventListener("click", function(event) {
-                    event.preventDefault();
-                    
-                    const submitBtn = document.getElementById('card-submit-btn');
-                    const originalText = submitBtn.innerHTML;
-                    submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
-                    
-                    hf.submit({
-                        cardholderName: document.getElementById('cardholder-name').value || 'Cardholder',
-                        billingAddress: {
-                            countryCode: selectedCountry.substring(0, 2).toUpperCase() || 'US'
-                        }
-                    }).then(function(data) {
-                        // Card payment successful
-                        showBootstrapAlert('success', 'Card payment successful! Redirecting...');
-                        
-                        // Show success message
-                        document.getElementById('paypalProcessing').style.display = 'block';
-                        document.getElementById('paypalButtonContainer').style.display = 'none';
-                        
-                        // Redirect to success page after a delay
-                        setTimeout(() => {
-                            window.location.href = '/paypal/success?paymentId=' + paymentId;
-                        }, 2000);
-                    }).catch(function(error) {
-                        // Handle card payment error
-                        submitBtn.disabled = false;
-                        submitBtn.innerHTML = originalText;
-                        
-                        const errorDiv = document.getElementById('card-errors');
-                        errorDiv.innerHTML = 'Card payment failed: ' + (error.message || 'Please check your card details and try again.');
-                        errorDiv.style.display = 'block';
-                        
-                        console.error('Card payment error:', error);
-                    });
-                });
-            }).catch(function(error) {
-                console.error('Failed to render card fields:', error);
-                document.getElementById('card-errors').innerHTML = 'Unable to load card payment form. Please use PayPal account payment instead.';
-                document.getElementById('card-errors').style.display = 'block';
-            });
-        }
-
-        // Show simple card form (fallback when PayPal SDK is not available)
-        function showSimpleCardForm(paymentId) {
-            const paypalButtonContainer = document.getElementById('paypalButtonContainer');
-            
-            paypalButtonContainer.innerHTML = `
-                <div class="card-payment-form simple-card-form">
-                    <h5><i class="fas fa-credit-card"></i> Card Details</h5>
-                    <p>Enter your card information securely</p>
-                    
-                    <form id="simpleCardForm">
-                        <div class="mb-3">
-                            <label for="simple-cardholder-name" class="form-label">Cardholder Name</label>
-                            <input type="text" class="form-control" id="simple-cardholder-name" placeholder="John Doe" required>
-                        </div>
-                        
-                        <div class="mb-3 form-group-relative">
-                            <label for="simple-card-number" class="form-label">Card Number</label>
-                            <input type="text" class="form-control" id="simple-card-number" 
-                                   placeholder="4111 1111 1111 1111" 
-                                   maxlength="19"
-                                   oninput="formatCardNumber(this)"
-                                   required>
-                            <span id="card-type-icon" class="card-type-indicator"></span>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="simple-expiry-date" class="form-label">Expiration Date (MM/YY)</label>
-                                <input type="text" class="form-control" id="simple-expiry-date" 
-                                       placeholder="MM/YY" maxlength="5"
-                                       oninput="formatExpiryDate(this)"
-                                       required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="simple-cvv" class="form-label">CVV</label>
-                                <input type="password" class="form-control" id="simple-cvv" 
-                                       placeholder="123" maxlength="4"
-                                       required>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="simple-email" class="form-label">Email for Receipt</label>
-                            <input type="email" class="form-control" id="simple-email" 
-                                   value="{{ session.get('user_email', '') }}"
-                                   placeholder="your@email.com" required>
-                        </div>
-                        
-                        <div class="card-icons mb-3">
-                            <i class="fab fa-cc-visa text-primary" title="Visa"></i>
-                            <i class="fab fa-cc-mastercard text-danger" title="Mastercard"></i>
-                            <i class="fab fa-cc-amex text-info" title="American Express"></i>
-                            <i class="fab fa-cc-discover text-warning" title="Discover"></i>
-                        </div>
-                        
-                        <div id="simple-card-errors" class="alert alert-danger" style="display: none;"></div>
-                        
-                        <div class="text-center mt-4">
-                            <button type="button" id="simple-card-submit-btn" class="btn btn-primary btn-lg" 
-                                    onclick="processSimpleCardPayment('${paymentId}')"
-                                    style="padding: 15px 40px;">
-                                <i class="fas fa-lock"></i> Pay $${selectedAmountUSD} USD
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-lg ms-2" 
-                                    onclick="createPayPalPaymentOrder('${selectedCountry}', ${selectedAmountUSD}, '${selectedPlan}')">
-                                <i class="fas fa-arrow-left"></i> Back to Options
-                            </button>
-                        </div>
-                    </form>
-                    
-                    <div class="alert alert-info mt-3">
-                        <p><small><i class="fas fa-shield-alt"></i> Your card details are encrypted and processed securely. We never store your card information.</small></p>
-                    </div>
-                </div>
-            `;
-            
-            // Add event listener for card number to show card type
-            document.getElementById('simple-card-number').addEventListener('input', function(e) {
-                updateCardTypeIcon(e.target.value);
-            });
-        }
-
-        // Process card payment with simple form
-        function processSimpleCardPayment(paymentId) {
-            // Collect form data
-            const cardholderName = document.getElementById('simple-cardholder-name').value.trim();
-            const cardNumber = document.getElementById('simple-card-number').value.trim().replace(/\s/g, '');
-            const expiryDate = document.getElementById('simple-expiry-date').value.trim();
-            const cvv = document.getElementById('simple-cvv').value.trim();
-            const email = document.getElementById('simple-email').value.trim();
-            
-            // Validation
-            const errors = [];
-            if (!cardholderName) errors.push('Cardholder name is required');
-            if (!cardNumber || !/^\d{13,19}$/.test(cardNumber)) errors.push('Valid card number is required');
-            if (!expiryDate || !/^\d{2}\/\d{2}$/.test(expiryDate)) errors.push('Valid expiry date (MM/YY) is required');
-            if (!cvv || !/^\d{3,4}$/.test(cvv)) errors.push('Valid CVV is required');
-            if (!email || !/^\S+@\S+\.\S+$/.test(email)) errors.push('Valid email is required');
-            
-            if (errors.length > 0) {
-                const errorDiv = document.getElementById('simple-card-errors');
-                errorDiv.innerHTML = errors.map(err => `<p class="mb-0">• ${err}</p>`).join('');
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            // Parse expiry date
-            const [expMonth, expYear] = expiryDate.split('/');
-            
-            // Show processing
-            const submitBtn = document.getElementById('simple-card-submit-btn');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
-            
-            // Hide any previous errors
-            document.getElementById('simple-card-errors').style.display = 'none';
-            
-            // Process payment through backend
-            fetch('/process_card_payment', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    payment_id: paymentId,
-                    amount_usd: selectedAmountUSD,
-                    plan: selectedPlan,
-                    first_name: cardholderName.split(' ')[0],
-                    last_name: cardholderName.split(' ').slice(1).join(' ') || cardholderName,
-                    card_number: cardNumber,
-                    expire_month: expMonth,
-                    expire_year: '20' + expYear,
-                    cvv: cvv,
-                    card_type: getCardType(cardNumber),
-                    email: email
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showBootstrapAlert('success', 'Payment successful! Redirecting...');
-                    
-                    // Show processing message
-                    document.getElementById('paypalProcessing').style.display = 'block';
-                    document.getElementById('paypalButtonContainer').style.display = 'none';
-                    
-                    // Redirect after delay
-                    setTimeout(() => {
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('paypalPaymentModal'));
-                        if (modal) modal.hide();
-                        window.location.href = '/dashboard';
-                    }, 2000);
-                } else {
-                    showBootstrapAlert('danger', data.message || 'Payment failed. Please try again.');
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalText;
-                    
-                    // Show specific error if available
-                    const errorDiv = document.getElementById('simple-card-errors');
-                    errorDiv.innerHTML = `<p class="mb-0">${data.message || 'Payment failed. Please check your details and try again.'}</p>`;
-                    errorDiv.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                showBootstrapAlert('danger', 'Network error. Please try again.');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
-                
-                const errorDiv = document.getElementById('simple-card-errors');
-                errorDiv.innerHTML = '<p class="mb-0">Network error. Please check your connection and try again.</p>';
-                errorDiv.style.display = 'block';
-            });
-        }
-
-        // Function to show alternative payment methods
-        function showAlternativePaymentMethods() {
-            const paypalModal = bootstrap.Modal.getInstance(document.getElementById('paypalPaymentModal'));
-            if (paypalModal) {
-                paypalModal.hide();
-            }
-            
-            // Show the payment method selection modal again
-            showPaymentMethodModal(selectedCountry, selectedAmountUSD, selectedPlan);
-        }
-
-        // Redirect to PayPal approval URL
-        function redirectToPayPal(approvalUrl) {
-            const btn = document.querySelector('.paypal-direct-btn');
-            if (btn) {
-                const originalText = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Redirecting...';
-                
-                // Redirect to PayPal
-                window.location.href = approvalUrl;
-                
-                // Re-enable button after 5 seconds if redirect fails
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }, 5000);
-            } else {
-                window.location.href = approvalUrl;
-            }
+        // Get local currency for country
+        function getLocalCurrency(country) {
+            const currencyMap = {
+                "Kenya": "KES",
+                "Uganda": "UGX",
+                "Rwanda": "RWF",
+                "Tanzania": "TZS",
+                "Zambia": "ZMW",
+                "South Sudan": "SSP",
+                "USA": "USD",
+                "South Africa": "ZAR",
+                "Nigeria": "NGN",
+                "UAE": "AED",
+                "Kuwait": "KWD",
+                "Canada": "CAD"
+            };
+            return currencyMap[country] || "USD";
         }
 
         // Select crypto option
@@ -1195,6 +583,67 @@
                 }
             });
         }
+
+        // Process card payment for international users
+async function processCardPayment(country, usdAmount, plan) {
+    // Show loading
+    showBootstrapAlert('info', 'Initializing international card payment...');
+    
+    try {
+        const response = await fetch('/create_paystack_international_charge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount_usd: usdAmount,
+                plan: plan,
+                country: country
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Open Paystack payment page in new tab
+            const paymentWindow = window.open(data.authorization_url, '_blank', 'width=800,height=600');
+            
+            if (paymentWindow) {
+                // Check payment status every 5 seconds
+                const checkInterval = setInterval(async () => {
+                    try {
+                        const statusResponse = await fetch(`/check_paystack_international_payment/${data.reference}`);
+                        const statusData = await statusResponse.json();
+                        
+                        if (statusData.status === 'completed') {
+                            clearInterval(checkInterval);
+                            paymentWindow.close();
+                            
+                            showBootstrapAlert('success', 'Payment successful! Your investment is now active.');
+                            setTimeout(() => {
+                                window.location.href = '/dashboard';
+                            }, 2000);
+                        }
+                    } catch (error) {
+                        console.error('Error checking payment status:', error);
+                    }
+                }, 5000);
+                
+                // Clear interval after 10 minutes
+                setTimeout(() => clearInterval(checkInterval), 600000);
+            } else {
+                // If popup blocked, redirect in same window
+                showBootstrapAlert('warning', 'Popup blocked. Redirecting to payment page...');
+                setTimeout(() => {
+                    window.location.href = data.authorization_url;
+                }, 1000);
+            }
+        } else {
+            showBootstrapAlert('danger', data.message || 'Failed to initialize card payment');
+        }
+    } catch (error) {
+        showBootstrapAlert('danger', 'Network error. Please try again.');
+        console.error('Card payment error:', error);
+    }
+}
 
         // Show crypto payment modal
         function showCryptoPaymentModal(country, usdAmount, plan) {
@@ -1373,10 +822,12 @@
             
             // Convert USD to local
             let amountLocal = 0;
+            let rate = 1;
             try {
                 const resp = await fetch(`/convert_currency?amount=${usdAmount}&from=USD&to=${toCurrency}`);
                 const data = await resp.json();
-                amountLocal = data.converted || usdAmount;
+                amountLocal = data.converted;
+                rate = data.rate;
             } catch (e) { 
                 amountLocal = usdAmount; 
             }
@@ -1584,91 +1035,6 @@
             };
         }
 
-        // Helper functions for card handling
-        function formatCardNumber(input) {
-            let value = input.value.replace(/\D/g, '');
-            value = value.replace(/(\d{4})/g, '$1 ').trim();
-            input.value = value.substring(0, 19);
-            updateCardTypeIcon(value.replace(/\s/g, ''));
-        }
-
-        function formatExpiryDate(input) {
-            let value = input.value.replace(/\D/g, '');
-            if (value.length >= 2) {
-                value = value.substring(0, 2) + '/' + value.substring(2);
-            }
-            input.value = value.substring(0, 5);
-        }
-
-        function updateCardTypeIcon(cardNumber) {
-            const icon = document.getElementById('card-type-icon');
-            if (!icon) return;
-            
-            const cardType = getCardType(cardNumber);
-            let iconClass = '';
-            let iconTitle = '';
-            
-            switch(cardType) {
-                case 'visa':
-                    iconClass = 'fab fa-cc-visa text-primary';
-                    iconTitle = 'Visa';
-                    break;
-                case 'mastercard':
-                    iconClass = 'fab fa-cc-mastercard text-danger';
-                    iconTitle = 'Mastercard';
-                    break;
-                case 'amex':
-                    iconClass = 'fab fa-cc-amex text-info';
-                    iconTitle = 'American Express';
-                    break;
-                case 'discover':
-                    iconClass = 'fab fa-cc-discover text-warning';
-                    iconTitle = 'Discover';
-                    break;
-                default:
-                    iconClass = 'fas fa-credit-card text-secondary';
-                    iconTitle = 'Card';
-            }
-            
-            icon.className = iconClass + ' card-type-indicator';
-            icon.title = iconTitle;
-        }
-
-        function getCardType(cardNumber) {
-            const cardPatterns = {
-                visa: /^4[0-9]{12}(?:[0-9]{3})?$/,
-                mastercard: /^5[1-5][0-9]{14}$/,
-                amex: /^3[47][0-9]{13}$/,
-                discover: /^6(?:011|5[0-9]{2})[0-9]{12}$/
-            };
-            
-            for (const [type, pattern] of Object.entries(cardPatterns)) {
-                if (pattern.test(cardNumber)) {
-                    return type;
-                }
-            }
-            return 'unknown';
-        }
-
-        // Get local currency for country
-        function getLocalCurrency(country) {
-            const currencyMap = {
-                "Kenya": "KES",
-                "Uganda": "UGX",
-                "Rwanda": "RWF",
-                "Tanzania": "TZS",
-                "Zambia": "ZMW",
-                "South Sudan": "SSP",
-                "USA": "USD",
-                "South Africa": "ZAR",
-                "Nigeria": "NGN",
-                "UAE": "AED",
-                "Kuwait": "KWD",
-                "Canada": "CAD"
-            };
-            return currencyMap[country] || "USD";
-        }
-
         // Helper function for alerts
         function showBootstrapAlert(type, message) {
             let alertId = "main-bootstrap-alert";
@@ -1714,32 +1080,29 @@
                 <div class="modal-body">
                     <select class="form-select form-select-lg" id="selectedCountry">
                         <option value="" disabled selected>Select Your Country</option>
-                        <!-- African countries with manual payment support -->
+                        <!-- African countries -->
                         <option value="Kenya">Kenya</option>
                         <option value="Uganda">Uganda</option>
-                        <option value="Tanzania">Tanzania</option>
                         <option value="Rwanda">Rwanda</option>
+                        <option value="Tanzania">Tanzania</option>
                         <option value="Zambia">Zambia</option>
                         <option value="South Sudan">South Sudan</option>
-                        <!-- Other countries -->
+                        <!-- New countries with crypto payments -->
                         <option value="USA">United States (USA)</option>
                         <option value="Canada">Canada</option>
                         <option value="South Africa">South Africa</option>
                         <option value="Nigeria">Nigeria</option>
                         <option value="UAE">United Arab Emirates (UAE)</option>
                         <option value="Kuwait">Kuwait</option>
-                        <option value="UK">United Kingdom (UK)</option>
-                        <option value="Australia">Australia</option>
-                        <option value="Germany">Germany</option>
-                        <option value="France">France</option>
                     </select>
                     <div class="mt-3 p-3 bg-light rounded">
                         <small class="text-muted">
                             <i class="fas fa-info-circle"></i> 
                             <strong>Available Payment Methods:</strong><br>
                             • All Countries: Cryptocurrency (BTC, USDT)<br>
-                            • All Countries: PayPal & Credit/Debit Cards<br>
-                            • Kenya, Uganda, Tanzania, Rwanda, Zambia, South Sudan: Manual Bank/Mobile Money Transfer
+                            • All Countries: International Card Payment (Visa, Mastercard, Amex)<br>
+                            • Kenya: MPesa via Paystack<br>
+                            • Other Countries: Bank Transfer / Mobile Money
                         </small>
                     </div>
                 </div>
@@ -1775,19 +1138,19 @@
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="crypto-tab" data-bs-toggle="tab" 
                                         data-bs-target="#crypto-tab-pane" type="button" role="tab">
-                                    <i class="fab fa-bitcoin payment-method-icon"></i> Cryptocurrency
+                                    <i class="fab fa-bitcoin"></i> Cryptocurrency
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="paypal-tab" data-bs-toggle="tab" 
-                                        data-bs-target="#paypal-tab-pane" type="button" role="tab">
-                                    <i class="fab fa-paypal payment-method-icon"></i> PayPal & Cards
+                                <button class="nav-link" id="card-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#card-tab-pane" type="button" role="tab">
+                                    <i class="fas fa-credit-card"></i> Card Payment
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="manual-tab" data-bs-toggle="tab" 
                                         data-bs-target="#manual-tab-pane" type="button" role="tab">
-                                    <i class="fas fa-university payment-method-icon"></i> Manual Payment
+                                    <i class="fas fa-university"></i> Traditional Payment
                                 </button>
                             </li>
                         </ul>
@@ -1816,138 +1179,55 @@
                                 </button>
                             </div>
                             
-                            <!-- PayPal & Cards Tab -->
-                            <div class="tab-pane fade" id="paypal-tab-pane" role="tabpanel">
-                                <div class="alert alert-primary">
-                                    <h6><i class="fab fa-paypal"></i> PayPal & Credit/Debit Cards</h6>
-                                    <p>Pay securely with PayPal account or use your Visa, Mastercard, American Express, or Discover card directly.</p>
-                                    <p><strong>Amount:</strong> $<span id="paymentAmountUSD2"></span> USD</p>
-                                    <div class="mt-2">
-                                        <i class="fab fa-paypal fa-2x me-2" style="color: #003087;"></i>
-                                        <i class="fab fa-cc-visa fa-2x me-2 text-primary"></i>
-                                        <i class="fab fa-cc-mastercard fa-2x me-2 text-danger"></i>
-                                        <i class="fab fa-cc-amex fa-2x me-2 text-info"></i>
-                                        <i class="fab fa-cc-discover fa-2x text-warning"></i>
-                                    </div>
-                                </div>
-                                
-                                <div class="alert alert-info">
-                                    <i class="fas fa-shield-alt"></i>
-                                    <strong>Secure Payment:</strong> All payments are processed securely by PayPal. No card details are stored on our servers.
-                                </div>
-                                
-                                <div class="row mt-3">
-                                    <div class="col-md-6">
-                                        <div class="card h-100">
-                                            <div class="card-body text-center">
-                                                <i class="fab fa-paypal fa-3x text-primary mb-3"></i>
-                                                <h5>PayPal Account</h5>
-                                                <p>Fast checkout with your PayPal balance or linked cards</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="card h-100">
-                                            <div class="card-body text-center">
-                                                <i class="fas fa-credit-card fa-3x text-success mb-3"></i>
-                                                <h5>Credit/Debit Card</h5>
-                                                <p>Pay directly with your card (no PayPal account needed)</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <button class="btn btn-primary btn-lg w-100 mt-4" id="proceedPaypalBtn">
-                                    <i class="fab fa-paypal"></i> Continue to PayPal & Card Payment
-                                </button>
-                            </div>
+                            <!-- Card Payment Tab -->
+                           <!-- Card Payment Tab -->
+<div class="tab-pane fade" id="card-tab-pane" role="tabpanel">
+    <h6><i class="fas fa-credit-card"></i> International Card Payment:</h6>
+    <div class="alert alert-success">
+        <i class="fas fa-globe-americas"></i>
+        <strong>Available Worldwide:</strong> 
+        <p class="mb-2">Pay with Visa, Mastercard, or American Express from any country.</p>
+        <ul class="mb-0">
+            <li><strong>Currency:</strong> USD (Charged in your local currency)</li>
+            <li><strong>Processing Time:</strong> Instant activation</li>
+            <li><strong>Secure Payment:</strong> 256-bit SSL encryption</li>
+            <li><strong>Supported Cards:</strong> Visa, Mastercard, American Express</li>
+        </ul>
+    </div>
+    
+    <div class="d-flex mb-3">
+        <i class="fab fa-cc-visa card-icons visa me-2"></i>
+        <i class="fab fa-cc-mastercard card-icons mastercard me-2"></i>
+        <i class="fab fa-cc-amex card-icons amex"></i>
+    </div>
+    
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        <strong>Note:</strong> 
+        <ul class="mb-0">
+            <li>Your card will be charged in <strong>USD ${usdAmount}</strong></li>
+            <li>Your bank will convert this to your local currency</li>
+            <li>Exchange rates and fees are determined by your card issuer</li>
+            <li>Payment is processed through Paystack's secure gateway</li>
+        </ul>
+    </div>
+    
+    <button class="btn btn-primary btn-lg w-100 mt-3" id="proceedCardBtn">
+        <i class="fas fa-credit-card"></i> Pay ${usdAmount} USD with Card
+    </button>
+</div>
                             
                             <!-- Manual Payment Tab -->
                             <div class="tab-pane fade" id="manual-tab-pane" role="tabpanel">
-                                <div class="alert alert-info">
-                                    <h6><i class="fas fa-university"></i> Bank Transfer / Mobile Money</h6>
-                                    <p>Complete payment through your local bank or mobile money service.</p>
-                                    <p><strong>Available for:</strong> Kenya, Uganda, Tanzania, Rwanda, Zambia, South Sudan</p>
-                                    <p><strong>Amount:</strong> Local currency equivalent of $<span id="paymentAmountUSD3"></span> USD</p>
-                                    <div id="manualInstructionsContent"></div>
+                                <div id="manualPaymentContent">
+                                    <!-- Manual payment content will be inserted here -->
                                 </div>
                                 
-                                <div class="alert alert-warning">
-                                    <i class="fas fa-clock"></i>
-                                    <strong>Processing Time:</strong> Manual payments require 1-3 business days for verification and activation.
-                                </div>
-                                
-                                <button class="btn btn-warning btn-lg w-100" id="proceedManualBtn">
-                                    <i class="fas fa-university"></i> Continue with Manual Payment
+                                <button class="btn btn-primary btn-lg w-100" id="proceedManualBtn">
+                                    <i class="fas fa-university"></i> Continue with Traditional Payment
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- PayPal Payment Modal -->
-    <div class="modal fade" id="paypalPaymentModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">
-                        <i class="fab fa-paypal"></i> PayPal & Card Payment - <span id="paypalModalCountry"></span>
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-primary">
-                        <h6><i class="fas fa-info-circle"></i> Payment Details:</h6>
-                        <p><strong>Plan:</strong> <span id="paypalModalPlan"></span></p>
-                        <p><strong>Amount:</strong> $<span id="paypalModalAmount"></span> USD</p>
-                        <p><strong>Country:</strong> <span id="paypalModalCountryText"></span></p>
-                    </div>
-                    
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <div class="alert alert-info">
-                                <h6><i class="fas fa-shield-alt"></i> Security</h6>
-                                <p class="small mb-0">Your payment is secured by PayPal. We never see or store your payment details.</p>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="alert alert-light">
-                                <h6><i class="fas fa-credit-card"></i> Accepted Methods</h6>
-                                <div class="mt-2">
-                                    <i class="fab fa-paypal fa-2x me-2" style="color: #003087;"></i>
-                                    <i class="fab fa-cc-visa fa-2x me-2 text-primary"></i>
-                                    <i class="fab fa-cc-mastercard fa-2x me-2 text-danger"></i>
-                                    <i class="fab fa-cc-amex fa-2x me-2 text-info"></i>
-                                    <i class="fab fa-cc-discover fa-2x text-warning"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div id="paypalProcessing" class="paypal-processing" style="display: none;">
-                        <i class="fab fa-paypal paypal-logo"></i>
-                        <h5 class="text-success">Processing Payment...</h5>
-                        <p>Please wait while we process your payment.</p>
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-                    
-                    <div id="paypalButtonContainer" class="paypal-button-container">
-                        <!-- PayPal and Card options will be loaded here -->
-                    </div>
-                    
-                    <div class="alert alert-warning mt-4">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Important:</strong> 
-                        <ul class="mb-0 mt-2">
-                            <li>Do not close this window during payment processing</li>
-                            <li>You will be redirected to complete your payment securely</li>
-                            <li>After payment, you'll be returned to your dashboard</li>
-                        </ul>
                     </div>
                 </div>
             </div>

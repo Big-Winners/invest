@@ -9,6 +9,8 @@ import uuid
 import hashlib
 import time
 import json
+import stripe
+import uuid
 import paypalrestsdk
 import hmac
 from decimal import Decimal
@@ -104,6 +106,7 @@ try:
     users_collection = db["users"]
     coinbase_payments_collection = db["coinbase_payments"]
     paypal_payments_collection = db["paypal_payments"]
+    paystack_card_payments_collection = db["paystack_card_payments"]
 except pymongo.errors.ConnectionFailure as e:
     print(f"MongoDB Connection Error: {e}")
     exit(1)
@@ -2739,12 +2742,21 @@ def paypal_webhook():
         print(f"PayPal webhook error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
-def send_payment_confirmation_email(email, username, amount, plan):
-    """Send payment confirmation email"""
+def send_payment_confirmation_email(email, username, amount, plan, reference, payment_method):
+    """Send payment confirmation email for different payment methods"""
     try:
+        payment_method_text = ""
+        if payment_method == "international_card":
+            payment_method_text = "International Card Payment"
+        elif payment_method == "crypto":
+            payment_method_text = "Cryptocurrency"
+        elif payment_method == "manual":
+            payment_method_text = "Bank Transfer"
+        else:
+            payment_method_text = "Payment"
+        
         msg = Message(
-            "Payment Confirmation - Big Winners",
+            f"Payment Confirmation - {payment_method_text} - Big Winners",
             recipients=[email],
             sender=app.config["MAIL_DEFAULT_SENDER"]
         )
@@ -2752,7 +2764,8 @@ def send_payment_confirmation_email(email, username, amount, plan):
         msg.html = f"""
         <h3>Payment Confirmed!</h3>
         <p>Dear {username},</p>
-        <p>Your payment of <strong>${amount:.2f} USD</strong> for the <strong>{plan.capitalize()} Plan</strong> has been successfully processed.</p>
+        <p>Your {payment_method_text.lower()} of <strong>${amount:.2f} USD</strong> for the <strong>{plan.capitalize()} Plan</strong> has been successfully processed.</p>
+        <p><strong>Reference:</strong> {reference}</p>
         <p>Your investment is now active and will start earning returns immediately.</p>
         <p>You can track your investment progress in your dashboard.</p>
         <p><strong>Thank you for investing with Big Winners!</strong></p>
@@ -2879,7 +2892,244 @@ def create_paypal_card_order():
         print(f"Error creating PayPal card order: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/create_paystack_international_charge", methods=["POST"])
+def create_paystack_international_charge():
+    """Create a Paystack charge for international card payments in USD"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        email = session["user_email"]
+        amount_usd = float(data.get("amount_usd", 0))
+        plan = data.get("plan", "unknown")
+        country = data.get("country", "")
+        
+        if amount_usd <= 0:
+            return jsonify({"status": "error", "message": "Invalid amount"}), 400
+        
+        # For international payments, we use USD directly
+        # Paystack Kenya accepts USD for international payments
+        amount_in_cents = int(amount_usd * 100)  # Paystack expects amount in cents for USD
+        
+        # Generate unique reference
+        reference = f"BW_INT_{str(uuid.uuid4())[:8].upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+        
+        # Create Paystack charge with USD currency
+        headers = {
+            "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "email": email,
+            "amount": amount_in_cents,  # Amount in cents
+            "currency": "USD",  # USD for international payments
+            "reference": reference,
+            "metadata": {
+                "plan": plan,
+                "amount_usd": amount_usd,
+                "country": country,
+                "user_id": session.get("user_id"),
+                "payment_type": "international_card",
+                "payment_method": "card"
+            },
+            "channels": ["card"],  # Only card payments
+            "callback_url": url_for('paystack_international_callback', _external=True),
+            "cancel_url": url_for('invest', _external=True)
+        }
+        
+        response = requests.post(
+            "https://api.paystack.co/transaction/initialize",
+            headers=headers,
+            json=payload
+        )
+        response_data = response.json()
+        
+        if response_data.get("status"):
+            # Save to database
+            db["paystack_international_payments"].insert_one({
+                "user_id": session["user_id"],
+                "email": email,
+                "username": session.get("user", ""),
+                "plan": plan,
+                "country": country,
+                "amount_usd": amount_usd,
+                "amount_charged": amount_usd,  # USD
+                "currency": "USD",
+                "reference": reference,
+                "paystack_reference": response_data["data"]["reference"],
+                "access_code": response_data["data"]["access_code"],
+                "status": "initiated",
+                "payment_type": "international_card",
+                "created_at": datetime.now(timezone.utc)
+            })
+            
+            return jsonify({
+                "status": "success",
+                "authorization_url": response_data["data"]["authorization_url"],
+                "reference": reference,
+                "access_code": response_data["data"]["access_code"]
+            })
+        
+        return jsonify({
+            "status": "error", 
+            "message": response_data.get("message", "Payment initialization failed"),
+            "details": response_data
+        }), 400
+        
+    except Exception as e:
+        print(f"Error creating Paystack international charge: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/paystack_international_callback", methods=["GET"])
+def paystack_international_callback():
+    """Handle Paystack international payment callback"""
+    reference = request.args.get('reference')
+    
+    if not reference:
+        flash("Payment reference missing!", "error")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        # Verify payment with Paystack
+        headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
+        response = requests.get(
+            f"https://api.paystack.co/transaction/verify/{reference}",
+            headers=headers
+        )
+        data = response.json()
+        
+        if data["status"] and data["data"]["status"] == "success":
+            # Get payment record
+            payment = db["paystack_international_payments"].find_one({"reference": reference})
+            
+            if not payment:
+                # Try to find by Paystack reference
+                payment = db["paystack_international_payments"].find_one({"paystack_reference": reference})
+            
+            if not payment:
+                flash("Payment record not found!", "error")
+                return redirect(url_for("dashboard"))
+            
+            # Update payment status
+            db["paystack_international_payments"].update_one(
+                {"_id": payment["_id"]},
+                {"$set": {
+                    "status": "completed",
+                    "verified_at": datetime.now(timezone.utc),
+                    "paystack_data": data["data"],
+                    "transaction_id": data["data"].get("id", ""),
+                    "gateway_response": data["data"].get("gateway_response", "")
+                }}
+            )
+            
+            # Activate user investment
+            users_collection.update_one(
+                {"_id": ObjectId(payment["user_id"])},
+                {"$set": {
+                    "investment_status": "active",
+                    "initial_investment": payment["amount_usd"],
+                    "investment_time": datetime.now(timezone.utc),
+                    "investment_plan": payment["plan"]
+                }}
+            )
+            
+            # Update session if current user
+            if session.get("user_id") == payment["user_id"]:
+                session.update({
+                    "investment": f"${payment['amount_usd']:.2f} invested",
+                    "total_investment": f"${payment['amount_usd']:.2f}",
+                    "investment_status": "active"
+                })
+            
+            # Send confirmation email
+            try:
+                send_payment_confirmation_email(
+                    payment["email"],
+                    payment["username"],
+                    payment["amount_usd"],
+                    payment["plan"],
+                    reference,
+                    "international_card"
+                )
+            except Exception as email_error:
+                print(f"Email error: {email_error}")
+            
+            flash("Card payment successful! Your investment is now active.", "success")
+            return redirect(url_for("dashboard"))
+        
+        flash("Payment verification failed or was not successful!", "error")
+        return redirect(url_for("invest"))
+        
+    except Exception as e:
+        flash(f"Payment processing error: {str(e)}", "error")
+        return redirect(url_for("dashboard"))
+
+@app.route("/check_paystack_international_payment/<reference>", methods=["GET"])
+def check_paystack_international_payment(reference):
+    """Check status of Paystack international payment"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        # Check in database first
+        payment = db["paystack_international_payments"].find_one({
+            "reference": reference,
+            "user_id": session["user_id"]
+        })
+        
+        if not payment:
+            return jsonify({"status": "error", "message": "Payment not found"}), 404
+        
+        # Verify with Paystack if pending
+        if payment["status"] in ["initiated", "pending"]:
+            headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
+            response = requests.get(
+                f"https://api.paystack.co/transaction/verify/{payment['paystack_reference']}",
+                headers=headers
+            )
+            verify_data = response.json()
+            
+            if verify_data["status"] and verify_data["data"]["status"] == "success":
+                # Update payment status
+                db["paystack_international_payments"].update_one(
+                    {"_id": payment["_id"]},
+                    {"$set": {
+                        "status": "completed",
+                        "verified_at": datetime.now(timezone.utc),
+                        "paystack_data": verify_data["data"]
+                    }}
+                )
+                
+                # Activate investment
+                users_collection.update_one(
+                    {"_id": ObjectId(payment["user_id"])},
+                    {"$set": {
+                        "investment_status": "active",
+                        "initial_investment": payment["amount_usd"],
+                        "investment_time": datetime.now(timezone.utc)
+                    }}
+                )
+                
+                return jsonify({
+                    "status": "completed",
+                    "message": "Payment completed successfully"
+                })
+        
+        return jsonify({
+            "status": payment["status"],
+            "message": f"Payment is {payment['status']}",
+            "data": {
+                "amount_usd": payment["amount_usd"],
+                "currency": payment["currency"],
+                "plan": payment["plan"],
+                "created_at": payment["created_at"].isoformat() if payment.get("created_at") else None
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5050)
