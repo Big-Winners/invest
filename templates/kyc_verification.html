@@ -267,7 +267,7 @@
             </div>
             
             <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i> Your KYC verification will be reviewed by our team within 24-48 hours. You'll receive an email notification once verified.
+                <i class="fas fa-info-circle"></i> Your KYC verification will be reviewed by our team within 0-1 hours. You'll receive an email notification once verified.
             </div>
             
             <div class="d-flex justify-content-between mt-4">
@@ -484,7 +484,7 @@
                 
                 if (result.success) {
                     // Show success message and redirect
-                    alert('KYC submitted successfully! Your account will be verified within 24-48 hours.');
+                    alert('KYC submitted successfully! Your account will be verified within 0-1 hour.');
                     window.location.href = '/dashboard';
                 } else {
                     alert('Error submitting KYC: ' + result.message);
@@ -629,7 +629,7 @@ async function submitKYC() {
             const result = await response.json();
             
             if (result.success) {
-                alert('KYC submitted successfully! Your account will be verified within 24-48 hours.');
+                alert('KYC submitted successfully! Your account will be verified within 0-1 hour.');
                 window.location.href = '/dashboard';
             } else if (result.message.includes('too large') && retryCount < maxRetries) {
                 // Retry with more compression

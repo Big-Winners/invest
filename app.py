@@ -107,6 +107,8 @@ try:
     coinbase_payments_collection = db["coinbase_payments"]
     paypal_payments_collection = db["paypal_payments"]
     paystack_card_payments_collection = db["paystack_card_payments"]
+    card_payments_collection = db["card_payments"]
+    paystack_international_payments = db["paystack_international_payments"] 
 except pymongo.errors.ConnectionFailure as e:
     print(f"MongoDB Connection Error: {e}")
     exit(1)
@@ -1278,6 +1280,19 @@ def admin_dashboard():
     # Pending payments for table
     pending_payments = list(db["pending_manual_payments"].find({"status": "pending"}))
     pending_crypto_count = crypto_payments_collection.count_documents({"status": "pending"})
+    twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    
+    new_users_last_24h = users_collection.count_documents({
+        "created_at": {"$gte": twenty_four_hours_ago}
+    }) if users_collection.find_one({"created_at": {"$exists": True}}) else 0
+    
+    payments_last_24h = card_payments_collection.count_documents({
+        "created_at": {"$gte": twenty_four_hours_ago}
+    })
+    
+    kyc_submissions_last_24h = kyc_collection.count_documents({
+        "submitted_at": {"$gte": twenty_four_hours_ago}
+    })
 
     # All users
     users = list(users_collection.find({}))
@@ -1299,8 +1314,13 @@ def admin_dashboard():
         total_invested=total_invested,
         emails=emails,
         invested_users=invested_users,
-         pending_crypto_count=pending_crypto_count
-       
+        pending_crypto_count=pending_crypto_count,
+        pending_kyc_count=pending_kyc_count,
+        new_users_last_24h=new_users_last_24h,
+        payments_last_24h=payments_last_24h,
+        kyc_submissions_last_24h=kyc_submissions_last_24h,
+        current_time=datetime.now(timezone.utc),
+        pending_reviews_count=pending_reviews_collection.count_documents({"status": "pending"})
     )
 
 # Example route to approve a manual payment
@@ -2415,7 +2435,7 @@ def create_paypal_order():
     
 @app.route("/process_card_payment", methods=["POST"])
 def process_card_payment():
-    """Process card payment with PayPal - Fixed version"""
+    """Process card payment with PayPal - Fixed version with database recording"""
     if "user_email" not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401
     
@@ -2477,6 +2497,30 @@ def process_card_payment():
         
         print(f"Creating PayPal payment for ${amount_usd}, Order ID: {order_id}")
         
+        # Save card payment record BEFORE processing (for tracking)
+        card_payment_record = {
+            "user_id": session["user_id"],
+            "email": session["user_email"],
+            "username": session.get("user", ""),
+            "plan": plan,
+            "amount_usd": amount_usd,
+            "card_type": card_details["type"],
+            "card_last4": card_details["number"][-4:] if len(card_details["number"]) >= 4 else "",
+            "expiry_month": card_details["expire_month"],
+            "expiry_year": card_details["expire_year"],
+            "order_id": order_id,
+            "payment_processor": "paypal",
+            "merchant_email": merchant_email,
+            "status": "processing",
+            "created_at": datetime.now(timezone.utc),
+            "ip_address": request.remote_addr,
+            "user_agent": request.headers.get('User-Agent', '')
+        }
+        
+        # Insert into card_payments collection
+        card_payment_id = card_payments_collection.insert_one(card_payment_record).inserted_id
+        print(f"Card payment record created: {card_payment_id}")
+        
         # Create PayPal payment with card
         payment_data = {
             "intent": "sale",
@@ -2522,11 +2566,36 @@ def process_card_payment():
             if payment.create():
                 print(f"PayPal payment created successfully: {payment.id}")
                 
+                # Update card payment record with PayPal ID
+                card_payments_collection.update_one(
+                    {"_id": card_payment_id},
+                    {"$set": {
+                        "paypal_payment_id": payment.id,
+                        "status": "created"
+                    }}
+                )
+                
                 # Execute payment
                 if payment.execute({"payer_id": payment.payer.payer_info.payer_id}):
                     print(f"Payment executed successfully: {payment.id}")
                     
-                    # Save to database
+                    # Get transaction details
+                    transaction_id = ""
+                    if payment.transactions and payment.transactions[0].related_resources:
+                        transaction_id = payment.transactions[0].related_resources[0].sale.id
+                    
+                    # Update card payment record with success
+                    card_payments_collection.update_one(
+                        {"_id": card_payment_id},
+                        {"$set": {
+                            "status": "completed",
+                            "transaction_id": transaction_id,
+                            "completed_at": datetime.now(timezone.utc),
+                            "paypal_response": payment.to_dict()
+                        }}
+                    )
+                    
+                    # Also save to paypal_payments_collection for backward compatibility
                     paypal_payments_collection.insert_one({
                         "user_id": session["user_id"],
                         "email": session["user_email"],
@@ -2542,7 +2611,7 @@ def process_card_payment():
                         "card_type": card_details["type"],
                         "created_at": datetime.now(timezone.utc),
                         "completed_at": datetime.now(timezone.utc),
-                        "transaction_id": payment.transactions[0].related_resources[0].sale.id if payment.transactions[0].related_resources else "N/A"
+                        "transaction_id": transaction_id
                     })
                     
                     # Update user investment
@@ -2564,13 +2633,12 @@ def process_card_payment():
                     
                     # Send confirmation email
                     try:
-                        transaction_id = payment.transactions[0].related_resources[0].sale.id if payment.transactions[0].related_resources else order_id
                         send_payment_confirmation_email(
                             email,
                             session["user"],
                             amount_usd,
                             plan,
-                            transaction_id,
+                            transaction_id or order_id,
                             "card"
                         )
                     except Exception as email_error:
@@ -2581,16 +2649,40 @@ def process_card_payment():
                         "message": "Payment successful! Your investment is now active.",
                         "transaction_id": transaction_id,
                         "amount_usd": amount_usd,
-                        "plan": plan
+                        "plan": plan,
+                        "order_id": order_id,
+                        "payment_id": str(card_payment_id)
                     })
                 else:
                     print(f"Payment execution failed: {payment.error}")
+                    
+                    # Update card payment record with failure
+                    card_payments_collection.update_one(
+                        {"_id": card_payment_id},
+                        {"$set": {
+                            "status": "failed",
+                            "error_message": str(payment.error),
+                            "failed_at": datetime.now(timezone.utc)
+                        }}
+                    )
+                    
                     return jsonify({
                         "status": "error", 
                         "message": f"Payment failed: {payment.error.get('message', 'Unknown error')}"
                     }), 400
             else:
                 print(f"Payment creation failed: {payment.error}")
+                
+                # Update card payment record with creation failure
+                card_payments_collection.update_one(
+                    {"_id": card_payment_id},
+                    {"$set": {
+                        "status": "creation_failed",
+                        "error_message": str(payment.error),
+                        "failed_at": datetime.now(timezone.utc)
+                    }}
+                )
+                
                 return jsonify({
                     "status": "error", 
                     "message": f"Payment creation failed: {payment.error.get('message', 'Unknown error')}"
@@ -2598,6 +2690,17 @@ def process_card_payment():
                 
         except Exception as paypal_error:
             print(f"PayPal processing exception: {paypal_error}")
+            
+            # Update card payment record with exception
+            card_payments_collection.update_one(
+                {"_id": card_payment_id},
+                {"$set": {
+                    "status": "exception",
+                    "error_message": str(paypal_error),
+                    "failed_at": datetime.now(timezone.utc)
+                }}
+            )
+            
             return jsonify({
                 "status": "error", 
                 "message": f"Payment processing error: {str(paypal_error)}"
@@ -2611,7 +2714,7 @@ def process_card_payment():
             "status": "error", 
             "message": f"Payment processing error: {str(e)}"
         }), 500
-    
+
 @app.route("/check_paypal_config", methods=["GET"])
 def check_paypal_config():
     """Check if PayPal is properly configured"""
@@ -2947,8 +3050,8 @@ def create_paystack_international_charge():
         response_data = response.json()
         
         if response_data.get("status"):
-            # Save to database
-            db["paystack_international_payments"].insert_one({
+            # Save to card_payments collection
+            card_payment_record = {
                 "user_id": session["user_id"],
                 "email": email,
                 "username": session.get("user", ""),
@@ -2960,16 +3063,28 @@ def create_paystack_international_charge():
                 "reference": reference,
                 "paystack_reference": response_data["data"]["reference"],
                 "access_code": response_data["data"]["access_code"],
+                "payment_processor": "paystack_international",
                 "status": "initiated",
                 "payment_type": "international_card",
-                "created_at": datetime.now(timezone.utc)
+                "created_at": datetime.now(timezone.utc),
+                "ip_address": request.remote_addr
+            }
+            
+            # Save to card_payments collection
+            card_payment_id = card_payments_collection.insert_one(card_payment_record).inserted_id
+            
+            # Also save to paystack_international_payments for backward compatibility
+            db["paystack_international_payments"].insert_one({
+                **card_payment_record,
+                "_id": card_payment_id  # Use same ID for reference
             })
             
             return jsonify({
                 "status": "success",
                 "authorization_url": response_data["data"]["authorization_url"],
                 "reference": reference,
-                "access_code": response_data["data"]["access_code"]
+                "access_code": response_data["data"]["access_code"],
+                "payment_id": str(card_payment_id)
             })
         
         return jsonify({
@@ -3012,7 +3127,20 @@ def paystack_international_callback():
                 flash("Payment record not found!", "error")
                 return redirect(url_for("dashboard"))
             
-            # Update payment status
+            # Update card_payments collection
+            card_payments_collection.update_one(
+                {"reference": reference},
+                {"$set": {
+                    "status": "completed",
+                    "verified_at": datetime.now(timezone.utc),
+                    "paystack_data": data["data"],
+                    "transaction_id": data["data"].get("id", ""),
+                    "gateway_response": data["data"].get("gateway_response", ""),
+                    "card_details": data["data"].get("authorization", {})
+                }}
+            )
+            
+            # Update paystack_international_payments collection
             db["paystack_international_payments"].update_one(
                 {"_id": payment["_id"]},
                 {"$set": {
@@ -3065,6 +3193,74 @@ def paystack_international_callback():
     except Exception as e:
         flash(f"Payment processing error: {str(e)}", "error")
         return redirect(url_for("dashboard"))
+
+@app.route("/admin/card_payments_count", methods=["GET"])
+@admin_required
+def card_payments_count():
+    """Get count of card payments"""
+    try:
+        total_payments = card_payments_collection.count_documents({})
+        pending_payments = card_payments_collection.count_documents({"status": "pending"})
+        
+        return jsonify({
+            "success": True,
+            "total_payments": total_payments,
+            "pending_payments": pending_payments
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/admin/pending_reviews_count", methods=["GET"])
+@admin_required
+def pending_reviews_count():
+    """Get count of pending reviews"""
+    try:
+        count = pending_reviews_collection.count_documents({"status": "pending"})
+        return jsonify({"success": True, "count": count})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/admin/card_payments")
+@admin_required
+def admin_card_payments():
+    """Admin page to view all card payments"""
+    # Get all card payments sorted by date
+    card_payments = list(card_payments_collection.find().sort("created_at", -1))
+    
+    # Get stats
+    total_payments = len(card_payments)
+    total_amount = sum(p.get("amount_usd", 0) for p in card_payments)
+    successful_payments = len([p for p in card_payments if p.get("status") == "completed"])
+    failed_payments = len([p for p in card_payments if p.get("status") in ["failed", "creation_failed", "exception"]])
+    
+    return render_template("admin_card_payments.html",
+                         card_payments=card_payments,
+                         total_payments=total_payments,
+                         total_amount=total_amount,
+                         successful_payments=successful_payments,
+                         failed_payments=failed_payments)
+
+@app.route("/admin/card_payment_details/<payment_id>", methods=["GET"])
+@admin_required
+def card_payment_details(payment_id):
+    """Get detailed card payment information"""
+    try:
+        payment = card_payments_collection.find_one({"_id": ObjectId(payment_id)})
+        if not payment:
+            return jsonify({"error": "Payment not found"}), 404
+        
+        # Convert ObjectId to string for JSON
+        payment["_id"] = str(payment["_id"])
+        payment["user_id"] = str(payment["user_id"])
+        
+        # Convert dates to string
+        for date_field in ["created_at", "completed_at", "failed_at", "verified_at"]:
+            if payment.get(date_field):
+                payment[date_field] = payment[date_field].isoformat()
+        
+        return jsonify(payment)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/check_paystack_international_payment/<reference>", methods=["GET"])
 def check_paystack_international_payment(reference):

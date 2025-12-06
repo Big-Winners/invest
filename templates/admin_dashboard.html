@@ -21,6 +21,12 @@
             border-radius: 1rem;
             box-shadow: 0 2px 10px rgba(44, 62, 80, 0.08);
             margin-bottom: 1.5rem;
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(44, 62, 80, 0.1);
         }
 
         .dashboard-cards {
@@ -66,6 +72,23 @@
             padding: 1rem;
         }
 
+        .badge-notification {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            font-size: 0.7rem;
+            padding: 4px 8px;
+        }
+
+        .quick-actions {
+            margin-bottom: 30px;
+        }
+
+        .quick-actions .btn {
+            margin: 5px;
+            padding: 10px 20px;
+        }
+
         @media (max-width: 768px) {
             .dashboard-cards .col-md-3 {
                 margin-bottom: 1rem;
@@ -90,73 +113,177 @@
             </div>
         </div>
     </nav>
+
+    <!-- Quick Actions Section -->
+    <div class="container mt-4 quick-actions">
+        <div class="row">
+            <div class="col-12">
+                <h4><i class="fas fa-bolt"></i> Quick Actions</h4>
+                <div class="d-flex flex-wrap">
+                    <a href="{{ url_for('admin_kyc_review') }}" class="btn btn-warning">
+                        <i class="fas fa-user-shield"></i> KYC Reviews
+                    </a>
+                    <a href="{{ url_for('admin_crypto_payments') }}" class="btn btn-info">
+                        <i class="fab fa-bitcoin"></i> Crypto Payments
+                    </a>
+                    <a href="{{ url_for('admin_card_payments') }}" class="btn btn-primary">
+                        <i class="fas fa-credit-card"></i> Card Payments
+                    </a>
+                    <a href="{{ url_for('admin_pending_reviews') }}" class="btn btn-secondary">
+                        <i class="fas fa-star"></i> User Reviews
+                    </a>
+                    <a href="#" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#sendEmailModal">
+                        <i class="fas fa-envelope"></i> Send Email
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
     <div class="container dashboard-cards">
         <div class="row g-3">
+            <!-- Total Users Card -->
             <div class="col-md-3">
-                <div class="card text-white bg-primary mb-3 h-100">
-                    <div class="card-body text-center">
+                <div class="card text-white bg-primary h-100">
+                    <div class="card-body text-center position-relative">
                         <h5 class="card-title"><i class="fas fa-users"></i> Total Users</h5>
                         <p class="card-text fs-3 mb-0">{{ user_count }}</p>
+                        <div class="mt-2">
+                            <small>Registered Users</small>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Invested Users Card -->
             <div class="col-md-3">
-                <div class="card text-white bg-success mb-3 h-100">
-                    <div class="card-body text-center">
-                        <h5 class="card-title"><i class="fas fa-user-check"></i> Users Invested</h5>
+                <div class="card text-white bg-success h-100">
+                    <div class="card-body text-center position-relative">
+                        <h5 class="card-title"><i class="fas fa-user-check"></i> Active Investors</h5>
                         <p class="card-text fs-3 mb-0">{{ invested_count }}</p>
+                        <div class="mt-2">
+                            <small>With Active Investments</small>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Total Invested Card -->
             <div class="col-md-3">
-                <div class="card text-white bg-warning mb-3 h-100">
-                    <div class="card-body text-center">
+                <div class="card text-white bg-warning h-100">
+                    <div class="card-body text-center position-relative">
                         <h5 class="card-title"><i class="fas fa-coins"></i> Total Invested</h5>
                         <p class="card-text fs-3 mb-0">${{ '%.2f' % total_invested }}</p>
+                        <div class="mt-2">
+                            <small>Total Investment Amount</small>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Pending KYC Card -->
             <div class="col-md-3">
-                <div class="card text-white bg-info mb-3 h-100">
-                    <div class="card-body text-center">
-                        <h5 class="card-title"><i class="fas fa-envelope"></i> User Emails</h5>
-                        <div style="max-height:70px; overflow-y:auto; font-size:0.92em; color: #222;">
-                            {% for email in emails %}
-                            <span class="badge bg-light text-dark mb-1">{{ email }}</span>
-                            {% endfor %}
+                <div class="card text-white bg-danger h-100">
+                    <div class="card-body text-center position-relative">
+                        <h5 class="card-title"><i class="fas fa-user-clock"></i> Pending KYC</h5>
+                        <p class="card-text fs-3 mb-0">{{ pending_kyc_count }}</p>
+                        {% if pending_kyc_count > 0 %}
+                        <span class="badge bg-light text-danger badge-notification">{{ pending_kyc_count }}</span>
+                        {% endif %}
+                        <div class="mt-2">
+                            <a href="{{ url_for('admin_kyc_review') }}" class="text-white text-decoration-underline small">
+                                <i class="fas fa-external-link-alt"></i> Review Now
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Crypto Payments Card -->
+            <div class="col-md-3">
+                <div class="card bg-dark text-white h-100">
+                    <div class="card-body text-center position-relative">
+                        <h5 class="card-title">
+                            <i class="fab fa-bitcoin"></i> Pending Crypto
+                        </h5>
+                        <p class="card-text fs-3 mb-0">{{ pending_crypto_count }}</p>
+                        {% if pending_crypto_count > 0 %}
+                        <span class="badge bg-warning text-dark badge-notification">{{ pending_crypto_count }}</span>
+                        {% endif %}
+                        <div class="mt-2">
+                            <a href="{{ url_for('admin_crypto_payments') }}" class="text-white text-decoration-underline small">
+                                <i class="fas fa-external-link-alt"></i> View All
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Payments Card -->
+            <div class="col-md-3">
+                <div class="card text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="card-body text-center position-relative">
+                        <h5 class="card-title">
+                            <i class="fas fa-credit-card"></i> Card Payments
+                        </h5>
+                        <p class="card-text fs-3 mb-0" id="cardPaymentsCount">Loading...</p>
+                        <div class="mt-2">
+                            <a href="{{ url_for('admin_card_payments') }}" class="text-white text-decoration-underline small">
+                                <i class="fas fa-external-link-alt"></i> Manage Payments
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Manual Payments Card -->
+            <div class="col-md-3">
+                <div class="card text-white" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="card-body text-center position-relative">
+                        <h5 class="card-title">
+                            <i class="fas fa-money-bill-wave"></i> Pending Manual
+                        </h5>
+                        <p class="card-text fs-3 mb-0">{{ pending_payments|length }}</p>
+                        {% if pending_payments|length > 0 %}
+                        <span class="badge bg-light text-danger badge-notification">{{ pending_payments|length }}</span>
+                        {% endif %}
+                        <div class="mt-2">
+                            <small>Manual Payments</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Reviews Card -->
+            <div class="col-md-3">
+                <div class="card text-white" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="card-body text-center position-relative">
+                        <h5 class="card-title">
+                            <i class="fas fa-star-half-alt"></i> Pending Reviews
+                        </h5>
+                        <p class="card-text fs-3 mb-0" id="pendingReviewsCount">Loading...</p>
+                        {% if pending_reviews_count > 0 %}
+                        <span class="badge bg-light text-primary badge-notification" id="reviewsBadge">{{ pending_reviews_count }}</span>
+                        {% endif %}
+                        <div class="mt-2">
+                            <a href="{{ url_for('admin_pending_reviews') }}" class="text-white text-decoration-underline small">
+                                <i class="fas fa-external-link-alt"></i> Moderate
+                            </a>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <!-- Add this card to the dashboard-cards row -->
-<div class="col-md-3">
-    <div class="card text-white bg-danger mb-3 h-100">
-        <div class="card-body text-center">
-            <h5 class="card-title"><i class="fas fa-user-shield"></i> Pending KYC</h5>
-            <p class="card-text fs-3 mb-0">{{ pending_kyc_count }}</p>
-            <a href="{{ url_for('admin_kyc_review') }}" class="text-white small">Review Now</a>
-        </div>
-    </div>
-</div>
-<!-- Add this card to the dashboard -->
-<div class="col-md-3">
-    <div class="card bg-dark text-white">
-        <div class="card-body">
-            <h5 class="card-title">
-                <i class="fab fa-bitcoin"></i> Crypto Payments
-            </h5>
-            <h2>{{ pending_crypto_count }}</h2>
-            <p class="card-text">Pending review</p>
-            <a href="{{ url_for('admin_crypto_payments') }}" class="btn btn-outline-light">
-                View All
-            </a>
-        </div>
-    </div>
-</div>
+
+    <!-- Pending Manual Payments Table -->
     <div class="container mb-5">
-        <h2 class="mb-4"><i class="fas fa-money-check-alt"></i> Pending Manual Payments</h2>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-money-check-alt"></i> Pending Manual Payments</h2>
+            <span class="badge bg-danger fs-6">{{ pending_payments|length }} pending</span>
+        </div>
+        
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div class="mt-3">
@@ -169,9 +296,10 @@
         </div>
         {% endif %}
         {% endwith %}
+        
         {% if pending_payments|length == 0 %}
         <div class="alert alert-info alert-dismissible fade show mt-3" role="alert">
-            No pending manual payments.
+            <i class="fas fa-check-circle me-2"></i> No pending manual payments.
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% else %}
@@ -195,23 +323,34 @@
                     <tr>
                         <td>{{ payment.username }}</td>
                         <td>{{ payment.email }}</td>
-                        <td>{{ payment.country }}</td>
-                        <td>{{ payment.plan }}</td>
-                        <td>${{ payment.amount_usd }}</td>
-                        <td>{{ payment.local_amount }}</td>
-                        <td>{{ payment.transaction_id or '' }}</td>
-                        <td>{{ payment.created_at.strftime('%Y-%m-%d %H:%M') if payment.created_at else '' }}</td>
                         <td>
-                            <form action="{{ url_for('approve_payment', payment_id=payment._id) }}" method="post"
-                                style="display:inline;">
-                                <button class="btn btn-success btn-sm" type="submit"><i class="fas fa-check"></i>
-                                    Approve</button>
-                            </form>
-                            <form action="{{ url_for('reject_payment', payment_id=payment._id) }}" method="post"
-                                style="display:inline;" onsubmit="return confirm('Reject this payment?');">
-                                <button class="btn btn-danger btn-sm" type="submit"><i class="fas fa-times"></i>
-                                    Reject</button>
-                            </form>
+                            <span class="badge bg-info">{{ payment.country }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ payment.plan }}</span>
+                        </td>
+                        <td><strong>${{ payment.amount_usd }}</strong></td>
+                        <td>{{ payment.local_amount }}</td>
+                        <td>
+                            <code>{{ payment.transaction_id or 'N/A' }}</code>
+                        </td>
+                        <td>
+                            <small>{{ payment.created_at.strftime('%Y-%m-%d %H:%M') if payment.created_at else '' }}</small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <form action="{{ url_for('approve_payment', payment_id=payment._id) }}" method="post" style="display:inline;">
+                                    <button class="btn btn-success" type="submit" title="Approve Payment">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('reject_payment', payment_id=payment._id) }}" method="post" style="display:inline;" 
+                                      onsubmit="return confirm('Are you sure you want to reject this payment?');">
+                                    <button class="btn btn-danger" type="submit" title="Reject Payment">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -220,8 +359,13 @@
         </div>
         {% endif %}
     </div>
+
+    <!-- Invested Users Table -->
     <div class="container invested-users-table mb-5">
-        <h4 class="mt-4 mb-3"><i class="fas fa-user-tie"></i> Invested Users</h4>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4><i class="fas fa-user-tie"></i> Active Investors</h4>
+            <span class="badge bg-success fs-6">{{ invested_count }} investors</span>
+        </div>
         <div class="table-responsive">
             <table class="table table-bordered table-striped align-middle">
                 <thead class="table-dark">
@@ -229,24 +373,137 @@
                         <th>Email</th>
                         <th>Username</th>
                         <th>Amount Invested</th>
+                        <th>Investment Status</th>
+                        <th>KYC Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for u in invested_users %}
                     <tr>
-                        <td>{{ u.email }}</td>
-                        <td>{{ u.username }}</td>
-                        <td>${{ u.initial_investment }}</td>
+                        <td>
+                            <i class="fas fa-envelope me-1"></i> {{ u.email }}
+                        </td>
+                        <td>
+                            <i class="fas fa-user me-1"></i> {{ u.username }}
+                        </td>
+                        <td>
+                            <span class="badge bg-warning text-dark fs-6">${{ u.initial_investment }}</span>
+                        </td>
+                        <td>
+                            {% if u.investment_status == 'active' %}
+                            <span class="badge bg-success">Active</span>
+                            {% elif u.investment_status == 'pending' %}
+                            <span class="badge bg-warning">Pending</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ u.investment_status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.kyc_status == 'verified' %}
+                            <span class="badge bg-success">Verified</span>
+                            {% elif u.kyc_status == 'pending' %}
+                            <span class="badge bg-warning">Pending</span>
+                            {% else %}
+                            <span class="badge bg-danger">Not Verified</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <!-- Recent Activity Section -->
+    <div class="container mb-5">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-history"></i> Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-clock text-warning"></i> Last 24 Hours</h6>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <i class="fas fa-user-plus text-success me-2"></i>
+                                <strong>{{ new_users_last_24h }}</strong> new users registered
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-money-bill-wave text-primary me-2"></i>
+                                <strong>{{ payments_last_24h }}</strong> new payments
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-file-signature text-info me-2"></i>
+                                <strong>{{ kyc_submissions_last_24h }}</strong> KYC submissions
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-chart-line text-success"></i> Quick Links</h6>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('admin_card_payments') }}" class="btn btn-outline-primary">
+                                <i class="fas fa-credit-card me-2"></i> View All Card Payments
+                            </a>
+                            <a href="{{ url_for('admin_kyc_review') }}" class="btn btn-outline-warning">
+                                <i class="fas fa-user-shield me-2"></i> Manage KYC Verifications
+                            </a>
+                            <a href="{{ url_for('admin_crypto_payments') }}" class="btn btn-outline-dark">
+                                <i class="fab fa-bitcoin me-2"></i> Review Crypto Payments
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <footer class="text-center py-3 bg-dark text-white">
-        &copy; {{ current_year or "2025" }} Big Winners Admin Dashboard
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0">&copy; {{ current_year or "2025" }} Big Winners Admin Dashboard</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-0">
+                        <i class="fas fa-server me-1"></i> Server Time: {{ current_time.strftime('%Y-%m-%d %H:%M:%S') if current_time else '' }}
+                    </p>
+                </div>
+            </div>
+        </div>
     </footer>
+
+    <!-- JavaScript to load dynamic counts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load card payments count
+            fetch('/admin/card_payments_count')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('cardPaymentsCount').textContent = data.total_payments;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading card payments count:', error);
+                    document.getElementById('cardPaymentsCount').textContent = 'Error';
+                });
+
+            // Load pending reviews count
+            fetch('/admin/pending_reviews_count')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('pendingReviewsCount').textContent = data.count;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading reviews count:', error);
+                    document.getElementById('pendingReviewsCount').textContent = 'Error';
+                });
+        });
+    </script>
 </body>
 
 </html>

@@ -217,7 +217,7 @@
 <div class="alert alert-warning">
     <h5><i class="fas fa-clock"></i> Payment Pending Approval</h5>
     <p>Your crypto payment of {{ session.total_investment }} is awaiting admin approval.</p>
-    <p>This usually takes 24-48 hours. You will be notified once approved.</p>
+    <p>This usually takes 0-30 minutes. You will be notified once approved.</p>
 </div>
 {% endif %}
             <script>
@@ -571,12 +571,81 @@
            
         </div>
 
-        <!-- Telegram Help Icon -->
+      <!-- Combined Help Icon - Telegram & WhatsApp -->
+<div class="help-icon-container">
+    <div class="help-icon-split">
+        <!-- Telegram Half -->
         <a href="https://t.me/bigwinnersltd"
-            class="help-icon btn btn-primary rounded-circle shadow d-flex justify-content-center align-items-center"
-            title="Need help? Chat with us on Telegram!" target="_blank">
+            class="help-half telegram-half btn btn-primary rounded-circle shadow d-flex justify-content-center align-items-center"
+            title="Chat with us on Telegram!" target="_blank">
             <i class="fab fa-telegram-plane"></i>
         </a>
+        
+        <!-- WhatsApp Half -->
+        <a href="https://wa.me/12193672073"
+            class="help-half whatsapp-half btn btn-success rounded-circle shadow d-flex justify-content-center align-items-center"
+            title="Message us on WhatsApp!" target="_blank">
+            <i class="fab fa-whatsapp"></i>
+        </a>
+    </div>
+</div>
+
+<style>
+    .help-icon-container {
+        position: fixed;
+        bottom: 90px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .help-icon-split {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    
+    .help-half {
+        position: absolute;
+        width: 50%;
+        height: 100%;
+        top: 0;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+    
+    .telegram-half {
+        left: 0;
+        background: #0088cc;
+        border-radius: 30px 0 0 30px;
+    }
+    
+    .whatsapp-half {
+        right: 0;
+        background: #25D366;
+        border-radius: 0 30px 30px 0;
+    }
+    
+    .help-half:hover {
+        transform: scale(1.1);
+        z-index: 2;
+    }
+    
+    .telegram-half:hover {
+        background: #0077b5;
+    }
+    
+    .whatsapp-half:hover {
+        background: #128C7E;
+    }
+</style>
 
         <!-- Menu Icon -->
         <div class="menu-container">
