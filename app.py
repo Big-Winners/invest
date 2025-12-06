@@ -2196,38 +2196,34 @@ def submit_crypto_payment():
             "status": "error", 
             "message": "Internal server error. Please try again later."
         }), 500
-
 def send_crypto_payment_notification(email, username, crypto_type, amount):
     """Send email notification for crypto payment"""
     try:
-        admin_emails = ["admin@bigwinners.com"]
-        
-        if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+        # Skip email sending entirely on Render
+        if os.environ.get("RENDER"):
+            print("Skipping email sending on Render")
             return
-        
+
+        if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+            print("Mail credentials missing, skipping email")
+            return
+
+        admin_emails = ["admin@bigwinners.com"]
+
         msg = Message(
             f"New Crypto Payment - {crypto_type} - Big Winners",
             recipients=admin_emails,
             sender=app.config["MAIL_DEFAULT_SENDER"]
         )
-        
-        msg.html = f"""
-        <h3>New Crypto Payment Received</h3>
-        <p><strong>User:</strong> {username}</p>
-        <p><strong>Email:</strong> {email}</p>
-        <p><strong>Crypto Type:</strong> {crypto_type}</p>
-        <p><strong>Amount:</strong> ${amount:.2f} USD</p>
-        <p><strong>Submitted At:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
-        <a href="{url_for('admin_crypto_payments', _external=True)}" 
-           style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-           Review Crypto Payments
-        </a>
-        """
-        
+
+        msg.html = f""" ... """
+
         mail.send(msg)
         print(f"Crypto payment notification sent for user: {username}")
+
     except Exception as e:
         print(f"Error sending crypto payment email: {e}")
+
 
 @app.route("/admin/crypto_payments")
 @admin_required
