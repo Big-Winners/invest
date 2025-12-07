@@ -637,6 +637,24 @@ def privacy():
 def contact():
     return render_template("contact.html")
 
+def convert_currency_internal(amount, from_currency, to_currency):
+    try:
+        response = requests.get(f"https://api.exchangerate-api.com/v4/latest/{from_currency}")
+        response.raise_for_status()
+        rate = response.json()["rates"].get(to_currency)
+
+        if not rate:
+            raise ValueError("Invalid currency")
+
+        # Optional margin (e.g., 3% worse for user)
+        margin = 0.000
+        rate_with_margin = rate * (1 - margin)
+
+        return round(float(amount) * rate_with_margin, 2)
+    except Exception as e:
+        raise RuntimeError(f"Currency conversion failed: {str(e)}")
+
+
 @app.route("/initialize_transaction", methods=["POST"])
 def initialize_transaction():
     if "user_email" not in session:
