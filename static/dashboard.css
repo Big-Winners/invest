@@ -22,6 +22,62 @@ h2 {
     text-align: center;
 }
 
+/* Crypto icons styling */
+.crypto-icon {
+    font-size: 1.5rem;
+}
+
+.crypto-icon.btc {
+    color: #F7931A;
+}
+
+.crypto-icon.erc20 {
+    color: #26A17B;
+}
+
+.crypto-icon.trc20 {
+    color: #FF6B01;
+}
+
+/* Payment option cards */
+.payment-option-card {
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+    border: 2px solid transparent;
+}
+
+.payment-option-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.payment-option-card.selected {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+/* Payment instructions styling */
+.payment-instructions {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.payment-instructions .step {
+    margin-bottom: 8px;
+    padding-left: 20px;
+    position: relative;
+}
+
+.payment-instructions .step:before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: #0d6efd;
+    font-weight: bold;
+}
+
 /* Welcome Banner */
 .welcome-banner {
     width: 100%;

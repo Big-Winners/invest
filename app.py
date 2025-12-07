@@ -895,7 +895,7 @@ def check_withdrawal():
         
         # Investment has matured
         initial_amount = float(user.get("initial_investment", 0))
-        required_payment = initial_amount * 2
+        required_payment = initial_amount * 1.5
         
         return jsonify({
             "status": "ready",
@@ -3399,6 +3399,638 @@ def check_paystack_international_payment(reference):
         
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+    
+@app.route("/submit_withdrawal_crypto_payment", methods=["POST"])
+@kyc_required
+def submit_withdrawal_crypto_payment():
+    """Handle crypto payment submissions for withdrawals"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ["amount_usd", "crypto_type", "wallet_address", "transaction_id", "payment_screenshot", "country", "profit_amount"]
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"status": "error", "message": f"Missing {field}"}), 400
+
+        # Validate crypto type
+        valid_crypto_types = ["BTC", "USDT_ERC20", "USDT_TRC20"]
+        if data["crypto_type"] not in valid_crypto_types:
+            return jsonify({"status": "error", "message": "Invalid crypto type"}), 400
+
+        # Generate filename for screenshot
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        filename = f"withdrawal_crypto_{session['user_id']}_{timestamp}.jpg"
+        
+        # Create withdrawal crypto payments directory
+        withdrawal_crypto_dir = os.path.join(app.config["UPLOAD_FOLDER"], "withdrawal_crypto")
+        os.makedirs(withdrawal_crypto_dir, exist_ok=True)
+        
+        # Process screenshot
+        screenshot_data = data["payment_screenshot"]
+        if screenshot_data.startswith('data:image'):
+            screenshot_data = screenshot_data.split(',')[1] if ',' in screenshot_data else screenshot_data
+        
+        try:
+            image_data = base64.b64decode(screenshot_data)
+            filepath = os.path.join(withdrawal_crypto_dir, filename)
+            
+            with open(filepath, 'wb') as f:
+                f.write(image_data)
+            
+            # Compress if too large
+            if os.path.getsize(filepath) > 2 * 1024 * 1024:
+                compress_image(filepath)
+                
+        except Exception as e:
+            print(f"Error processing withdrawal screenshot: {e}")
+            return jsonify({"status": "error", "message": "Invalid screenshot format"}), 400
+
+        # Save withdrawal payment record
+        payment_data = {
+            "user_id": session["user_id"],
+            "username": session["user"],
+            "email": session["user_email"],
+            "type": "withdrawal_fee",
+            "country": data["country"],
+            "amount_usd": float(data["amount_usd"]),
+            "profit_amount": float(data["profit_amount"]),
+            "crypto_type": data["crypto_type"],
+            "wallet_address": data["wallet_address"],
+            "transaction_id": data["transaction_id"],
+            "screenshot_filename": filename,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+            "approved_at": None,
+            "admin_notes": ""
+        }
+        
+        # Insert into withdrawal_crypto_payments collection
+        withdrawal_crypto_collection = db["withdrawal_crypto_payments"]
+        withdrawal_crypto_collection.insert_one(payment_data)
+        
+        # Update user's withdrawal status
+        users_collection.update_one(
+            {"_id": ObjectId(session["user_id"])},
+            {"$set": {"withdrawal_status": "pending_crypto_payment"}}
+        )
+        
+        # Send email notification to admin
+        try:
+            send_withdrawal_crypto_notification(
+                session["user_email"], 
+                session["user"], 
+                data["crypto_type"], 
+                float(data["amount_usd"]),
+                float(data["profit_amount"])
+            )
+        except Exception as e:
+            print(f"Email notification error: {e}")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Withdrawal crypto payment submitted for review. You will be notified once approved.",
+            "redirect_url": url_for("dashboard")
+        })
+        
+    except Exception as e:
+        print(f"Error in submit_withdrawal_crypto_payment: {e}")
+        return jsonify({
+            "status": "error", 
+            "message": "Internal server error. Please try again later."
+        }), 500
+
+
+@app.route("/create_withdrawal_card_payment", methods=["POST"])
+@kyc_required
+def create_withdrawal_card_payment():
+    """Create a Paystack charge for withdrawal card payments in USD"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        email = session["user_email"]
+        amount_usd = float(data.get("amount_usd", 0))
+        country = data.get("country", "")
+        profit_amount = float(data.get("profit_amount", 0))
+        
+        if amount_usd <= 0:
+            return jsonify({"status": "error", "message": "Invalid amount"}), 400
+        
+        # For withdrawal payments, we use USD
+        amount_in_cents = int(amount_usd * 100)
+        
+        # Generate unique reference
+        reference = f"BW_WITHDRAW_{str(uuid.uuid4())[:8].upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+        
+        # Create Paystack charge with USD currency
+        headers = {
+            "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "email": email,
+            "amount": amount_in_cents,
+            "currency": "USD",
+            "reference": reference,
+            "metadata": {
+                "purpose": "withdrawal_fee",
+                "amount_usd": amount_usd,
+                "profit_amount": profit_amount,
+                "country": country,
+                "user_id": session.get("user_id"),
+                "payment_type": "withdrawal_card",
+                "payment_method": "card"
+            },
+            "channels": ["card"],
+            "callback_url": url_for('withdrawal_card_callback', _external=True),
+            "cancel_url": url_for('dashboard', _external=True)
+        }
+        
+        response = requests.post(
+            "https://api.paystack.co/transaction/initialize",
+            headers=headers,
+            json=payload
+        )
+        response_data = response.json()
+        
+        if response_data.get("status"):
+            # Save to withdrawal_card_payments collection
+            card_payment_record = {
+                "user_id": session["user_id"],
+                "email": email,
+                "username": session.get("user", ""),
+                "type": "withdrawal_fee",
+                "country": country,
+                "amount_usd": amount_usd,
+                "profit_amount": profit_amount,
+                "amount_charged": amount_usd,
+                "currency": "USD",
+                "reference": reference,
+                "paystack_reference": response_data["data"]["reference"],
+                "access_code": response_data["data"]["access_code"],
+                "payment_processor": "paystack",
+                "status": "initiated",
+                "payment_type": "withdrawal_card",
+                "created_at": datetime.now(timezone.utc),
+                "ip_address": request.remote_addr
+            }
+            
+            # Save to withdrawal_card_payments collection
+            db["withdrawal_card_payments"].insert_one(card_payment_record)
+            
+            return jsonify({
+                "status": "success",
+                "authorization_url": response_data["data"]["authorization_url"],
+                "reference": reference,
+                "access_code": response_data["data"]["access_code"]
+            })
+        
+        return jsonify({
+            "status": "error", 
+            "message": response_data.get("message", "Payment initialization failed"),
+            "details": response_data
+        }), 400
+        
+    except Exception as e:
+        print(f"Error creating withdrawal card payment: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/withdrawal_card_callback", methods=["GET"])
+def withdrawal_card_callback():
+    """Handle Paystack withdrawal card payment callback"""
+    reference = request.args.get('reference')
+    
+    if not reference:
+        flash("Payment reference missing!", "error")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        # Verify payment with Paystack
+        headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
+        response = requests.get(
+            f"https://api.paystack.co/transaction/verify/{reference}",
+            headers=headers
+        )
+        data = response.json()
+        
+        if data["status"] and data["data"]["status"] == "success":
+            # Get payment record
+            payment = db["withdrawal_card_payments"].find_one({"reference": reference})
+            
+            if not payment:
+                flash("Payment record not found!", "error")
+                return redirect(url_for("dashboard"))
+            
+            # Update payment status
+            db["withdrawal_card_payments"].update_one(
+                {"_id": payment["_id"]},
+                {"$set": {
+                    "status": "completed",
+                    "verified_at": datetime.now(timezone.utc),
+                    "paystack_data": data["data"],
+                    "transaction_id": data["data"].get("id", ""),
+                    "gateway_response": data["data"].get("gateway_response", "")
+                }}
+            )
+            
+            # Update user's withdrawal status
+            users_collection.update_one(
+                {"_id": ObjectId(payment["user_id"])},
+                {"$set": {"withdrawal_status": "pending_approval"}}
+            )
+            
+            # Send notification to admin
+            try:
+                send_withdrawal_card_notification(
+                    payment["email"],
+                    payment["username"],
+                    payment["amount_usd"],
+                    payment["profit_amount"]
+                )
+            except Exception as e:
+                print(f"Email error: {e}")
+            
+            flash("Withdrawal payment successful! Your withdrawal is now pending approval.", "success")
+            return redirect(url_for("dashboard"))
+        
+        flash("Payment verification failed or was not successful!", "error")
+        return redirect(url_for("dashboard"))
+        
+    except Exception as e:
+        flash(f"Payment processing error: {str(e)}", "error")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/check_withdrawal_card_payment/<reference>", methods=["GET"])
+@kyc_required
+def check_withdrawal_card_payment(reference):
+    """Check status of withdrawal card payment"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        # Check in database
+        payment = db["withdrawal_card_payments"].find_one({
+            "reference": reference,
+            "user_id": session["user_id"]
+        })
+        
+        if not payment:
+            return jsonify({"status": "error", "message": "Payment not found"}), 404
+        
+        # Verify with Paystack if pending
+        if payment["status"] in ["initiated", "pending"]:
+            headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
+            response = requests.get(
+                f"https://api.paystack.co/transaction/verify/{payment['paystack_reference']}",
+                headers=headers
+            )
+            verify_data = response.json()
+            
+            if verify_data["status"] and verify_data["data"]["status"] == "success":
+                # Update payment status
+                db["withdrawal_card_payments"].update_one(
+                    {"_id": payment["_id"]},
+                    {"$set": {
+                        "status": "completed",
+                        "verified_at": datetime.now(timezone.utc),
+                        "paystack_data": verify_data["data"]
+                    }}
+                )
+                
+                # Update user's withdrawal status
+                users_collection.update_one(
+                    {"_id": ObjectId(payment["user_id"])},
+                    {"$set": {"withdrawal_status": "pending_approval"}}
+                )
+                
+                return jsonify({
+                    "status": "completed",
+                    "message": "Payment completed successfully! Withdrawal pending approval."
+                })
+        
+        return jsonify({
+            "status": payment["status"],
+            "message": f"Payment is {payment['status']}"
+        })
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/manual_withdrawal_payment_notice", methods=["POST"])
+@kyc_required
+def manual_withdrawal_payment_notice():
+    """Handle manual withdrawal payment submissions"""
+    if "user_email" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        data = request.get_json()
+        amount_usd = float(data.get("amount_usd", 0))
+        local_amount = data.get("local_amount")
+        country = data.get("country", "")
+        transaction_id = data.get("transaction_id", "")
+        profit_amount = float(data.get("profit_amount", 0))
+        
+        if not transaction_id:
+            return jsonify({"status": "error", "message": "Transaction ID is required"}), 400
+        
+        # Save withdrawal manual payment
+        withdrawal_data = {
+            "user_id": session["user_id"],
+            "username": session["user"],
+            "email": session["user_email"],
+            "type": "withdrawal_fee",
+            "country": country,
+            "amount_usd": amount_usd,
+            "profit_amount": profit_amount,
+            "local_amount": local_amount,
+            "transaction_id": transaction_id,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+            "payment_method": "manual"
+        }
+        
+        db["withdrawal_manual_payments"].insert_one(withdrawal_data)
+        
+        # Update user's withdrawal status
+        users_collection.update_one(
+            {"_id": ObjectId(session["user_id"])},
+            {"$set": {"withdrawal_status": "pending_approval"}}
+        )
+        
+        # Send notification to admin
+        try:
+            send_withdrawal_manual_notification(
+                session["user_email"],
+                session["user"],
+                amount_usd,
+                profit_amount,
+                country,
+                transaction_id
+            )
+        except Exception as e:
+            print(f"Email error: {e}")
+        
+        return jsonify({
+            "status": "pending",
+            "message": "Withdrawal payment submitted for approval. You will be notified once approved."
+        })
+        
+    except Exception as e:
+        print(f"Error in manual_withdrawal_payment_notice: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# Helper functions for email notifications
+def send_withdrawal_crypto_notification(email, username, crypto_type, amount, profit):
+    """Send email notification for withdrawal crypto payment"""
+    try:
+        admin_emails = ["admin@bigwinners.com"]
+        
+        msg = Message(
+            f"New Withdrawal Crypto Payment - {crypto_type} - Big Winners",
+            recipients=admin_emails,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>New Withdrawal Crypto Payment Received</h3>
+        <p><strong>User:</strong> {username}</p>
+        <p><strong>Email:</strong> {email}</p>
+        <p><strong>Crypto Type:</strong> {crypto_type}</p>
+        <p><strong>Withdrawal Fee Amount:</strong> ${amount:.2f} USD</p>
+        <p><strong>Profit to Withdraw:</strong> ${profit:.2f} USD</p>
+        <p><strong>Submitted At:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p>Please review the withdrawal crypto payment in the admin dashboard.</p>
+        """
+        
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending withdrawal crypto email: {e}")
+
+
+def send_withdrawal_card_notification(email, username, amount, profit):
+    """Send email notification for withdrawal card payment"""
+    try:
+        admin_emails = ["admin@bigwinners.com"]
+        
+        msg = Message(
+            f"New Withdrawal Card Payment - Big Winners",
+            recipients=admin_emails,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>New Withdrawal Card Payment Received</h3>
+        <p><strong>User:</strong> {username}</p>
+        <p><strong>Email:</strong> {email}</p>
+        <p><strong>Withdrawal Fee Amount:</strong> ${amount:.2f} USD</p>
+        <p><strong>Profit to Withdraw:</strong> ${profit:.2f} USD</p>
+        <p><strong>Submitted At:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p>Payment completed successfully via card. Please approve the withdrawal.</p>
+        """
+        
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending withdrawal card email: {e}")
+
+
+def send_withdrawal_manual_notification(email, username, amount, profit, country, transaction_id):
+    """Send email notification for manual withdrawal payment"""
+    try:
+        admin_emails = ["admin@bigwinners.com"]
+        
+        msg = Message(
+            f"New Manual Withdrawal Payment - Big Winners",
+            recipients=admin_emails,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>New Manual Withdrawal Payment Received</h3>
+        <p><strong>User:</strong> {username}</p>
+        <p><strong>Email:</strong> {email}</p>
+        <p><strong>Country:</strong> {country}</p>
+        <p><strong>Transaction ID:</strong> {transaction_id}</p>
+        <p><strong>Withdrawal Fee Amount:</strong> ${amount:.2f} USD</p>
+        <p><strong>Profit to Withdraw:</strong> ${profit:.2f} USD</p>
+        <p><strong>Submitted At:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        <p>Please verify the payment and approve the withdrawal.</p>
+        """
+        
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending withdrawal manual email: {e}")
+
+
+# Admin routes for managing withdrawals
+@app.route("/admin/withdrawals")
+@admin_required
+def admin_withdrawals():
+    """Admin page to manage withdrawal requests"""
+    # Get pending withdrawal payments
+    pending_crypto = list(db["withdrawal_crypto_payments"].find({"status": "pending"}).sort("created_at", -1))
+    pending_card = list(db["withdrawal_card_payments"].find({"status": "completed"}).sort("created_at", -1))
+    pending_manual = list(db["withdrawal_manual_payments"].find({"status": "pending"}).sort("created_at", -1))
+    
+    # Get users with pending withdrawals
+    pending_users = list(users_collection.find({
+        "withdrawal_status": {"$in": ["pending_approval", "pending_crypto_payment"]}
+    }))
+    
+    return render_template("admin_withdrawals.html",
+                         pending_crypto=pending_crypto,
+                         pending_card=pending_card,
+                         pending_manual=pending_manual,
+                         pending_users=pending_users)
+
+
+@app.route("/admin/approve_withdrawal/<withdrawal_id>", methods=["POST"])
+@admin_required
+def approve_withdrawal(withdrawal_id):
+    """Approve a withdrawal request"""
+    try:
+        # Get withdrawal type from request
+        withdrawal_type = request.form.get("withdrawal_type")
+        
+        if withdrawal_type == "crypto":
+            # Handle crypto withdrawal approval
+            withdrawal = db["withdrawal_crypto_payments"].find_one({"_id": ObjectId(withdrawal_id)})
+            if withdrawal:
+                # Mark as approved
+                db["withdrawal_crypto_payments"].update_one(
+                    {"_id": ObjectId(withdrawal_id)},
+                    {"$set": {
+                        "status": "approved",
+                        "approved_at": datetime.now(timezone.utc),
+                        "approved_by": session.get("user"),
+                        "admin_notes": request.form.get("notes", "")
+                    }}
+                )
+                
+                # Update user's withdrawal status and reset investment
+                users_collection.update_one(
+                    {"_id": ObjectId(withdrawal["user_id"])},
+                    {"$set": {
+                        "withdrawal_status": "completed",
+                        "investment_status": "none",
+                        "initial_investment": 0.0,
+                        "investment_time": None
+                    }}
+                )
+                
+                # Send approval email to user
+                send_withdrawal_approval_email(
+                    withdrawal["email"],
+                    withdrawal["username"],
+                    withdrawal["profit_amount"]
+                )
+                
+                flash(f"Withdrawal approved! ${withdrawal['profit_amount']:.2f} has been processed.", "success")
+        
+        elif withdrawal_type == "card":
+            # Handle card withdrawal approval
+            withdrawal = db["withdrawal_card_payments"].find_one({"_id": ObjectId(withdrawal_id)})
+            if withdrawal:
+                db["withdrawal_card_payments"].update_one(
+                    {"_id": ObjectId(withdrawal_id)},
+                    {"$set": {
+                        "status": "approved",
+                        "approved_at": datetime.now(timezone.utc),
+                        "approved_by": session.get("user"),
+                        "admin_notes": request.form.get("notes", "")
+                    }}
+                )
+                
+                users_collection.update_one(
+                    {"_id": ObjectId(withdrawal["user_id"])},
+                    {"$set": {
+                        "withdrawal_status": "completed",
+                        "investment_status": "none",
+                        "initial_investment": 0.0,
+                        "investment_time": None
+                    }}
+                )
+                
+                send_withdrawal_approval_email(
+                    withdrawal["email"],
+                    withdrawal["username"],
+                    withdrawal["profit_amount"]
+                )
+                
+                flash(f"Withdrawal approved! ${withdrawal['profit_amount']:.2f} has been processed.", "success")
+        
+        elif withdrawal_type == "manual":
+            # Handle manual withdrawal approval
+            withdrawal = db["withdrawal_manual_payments"].find_one({"_id": ObjectId(withdrawal_id)})
+            if withdrawal:
+                db["withdrawal_manual_payments"].update_one(
+                    {"_id": ObjectId(withdrawal_id)},
+                    {"$set": {
+                        "status": "approved",
+                        "approved_at": datetime.now(timezone.utc),
+                        "approved_by": session.get("user"),
+                        "admin_notes": request.form.get("notes", "")
+                    }}
+                )
+                
+                users_collection.update_one(
+                    {"_id": ObjectId(withdrawal["user_id"])},
+                    {"$set": {
+                        "withdrawal_status": "completed",
+                        "investment_status": "none",
+                        "initial_investment": 0.0,
+                        "investment_time": None
+                    }}
+                )
+                
+                send_withdrawal_approval_email(
+                    withdrawal["email"],
+                    withdrawal["username"],
+                    withdrawal["profit_amount"]
+                )
+                
+                flash(f"Withdrawal approved! ${withdrawal['profit_amount']:.2f} has been processed.", "success")
+        
+        return redirect(url_for("admin_withdrawals"))
+        
+    except Exception as e:
+        flash(f"Error approving withdrawal: {str(e)}", "danger")
+        return redirect(url_for("admin_withdrawals"))
+
+
+def send_withdrawal_approval_email(email, username, profit_amount):
+    """Send withdrawal approval email to user"""
+    try:
+        msg = Message(
+            "Withdrawal Approved - Big Winners",
+            recipients=[email],
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        
+        msg.html = f"""
+        <h3>Withdrawal Approved!</h3>
+        <p>Dear {username},</p>
+        <p>We're pleased to inform you that your withdrawal request has been approved.</p>
+        <p><strong>Amount Withdrawn:</strong> ${profit_amount:.2f} USD</p>
+        <p>The funds have been processed and should reflect in your account shortly.</p>
+        <p>Thank you for investing with Big Winners!</p>
+        <p><strong>The Big Winners Team</strong></p>
+        """
+        
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending withdrawal approval email: {e}")
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5050)
