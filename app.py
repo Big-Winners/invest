@@ -650,16 +650,11 @@ def initialize_transaction():
         if not amount_kes:
             return jsonify({"status": False, "message": "Missing amount"}), 400
 
-        # Convert KES to USD for metadata
-        conversion_response = requests.get(
-            f"http://{request.host}/convert_currency?amount={amount_kes}&from=KES&to=USD"
-        )
-        conversion_data = conversion_response.json()
-        
-        if "error" in conversion_data:
-            return jsonify({"status": False, "message": conversion_data["error"]}), 400
-            
-        amount_usd = conversion_data["converted"]
+        # ✅ Convert KES → USD internally (no HTTP recursion)
+        try:
+            amount_usd = convert_currency_internal(amount_kes, "KES", "USD")
+        except Exception as e:
+            return jsonify({"status": False, "message": f"Currency conversion failed: {str(e)}"}), 400
 
         headers = {
             "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
@@ -687,13 +682,15 @@ def initialize_transaction():
 
         if response_data.get("status"):
             return jsonify(response_data)
+
         return jsonify({
-            "status": False, 
+            "status": False,
             "message": response_data.get("message", "Payment initialization failed")
         }), 400
 
     except Exception as e:
         return jsonify({"status": False, "message": str(e)}), 500
+
 
 @app.route('/paystack_callback', methods=['GET'])
 def paystack_callback():
