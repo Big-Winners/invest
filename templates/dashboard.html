@@ -27,13 +27,11 @@
     {% endif %}
     {% endwith %}
     
-      
     <!-- Welcome Back Banner -->
-    <div class="welcome-banner">
-        <h3>Welcome back, {{ session.get('user', 'User') }}!</h3>
-        <p>You have invested {{ session.get('total_investment', '$0') }} so far. Keep going!</p>
-    </div>
-
+<div class="welcome-banner">
+    <h3>Welcome back, {{ session.get('user', 'User') }}!</h3>
+    <p>Total investment: {{ session.get('total_investment', '$0') }} | Active investment growing...</p>
+</div>
     <!-- Main Container -->
     <div class="container">
         
@@ -86,108 +84,110 @@
                 const ctx = document.getElementById('investmentChart').getContext('2d');
                 let investmentChart;
 
-                // Initialize the chart
-                function initializeChart(initialInvestment = 0) {
-                    const ctx = document.getElementById('investmentChart').getContext('2d');
-                    investmentChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: Array(20).fill('').map((_, i) => `${i * 5}s`),
-                            datasets: [
-                                {
-                                    label: 'Investment Value (USD)',
-                                    data: Array(20).fill(initialInvestment),
-                                    borderColor: 'rgba(75, 192, 192, 1)',
-                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                    borderWidth: 2,
-                                    fill: true,
-                                    tension: 0.4
-                                },
-                                {
-                                    label: 'Profit Accumulated (USD)',
-                                    data: Array(20).fill(0),
-                                    borderColor: 'rgba(255, 99, 132, 1)',
-                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                                    borderWidth: 2,
-                                    fill: true,
-                                    tension: 0.4
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true, // Ensure the chart is responsive
-                            maintainAspectRatio: false, // Allow the chart to adjust its aspect ratio
-                            plugins: {
-                                legend: { position: 'top' },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function (context) {
-                                            return `${context.dataset.label}: $${context.raw.toFixed(2)}`;
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                x: { title: { display: true, text: 'Time Progress' } },
-                                y: {
-                                    title: { display: true, text: 'Amount (USD)' },
-                                    beginAtZero: true
-                                }
-                            }
-                        }
-                    });
+                // In the initializeChart function:
+function initializeChart(initialInvestment = 0) {
+    const ctx = document.getElementById('investmentChart').getContext('2d');
+    investmentChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array(20).fill('').map((_, i) => `${i * 5}s`),
+            datasets: [
+                {
+                    label: 'Total Investment Value (USD)',
+                    data: Array(20).fill(initialInvestment),
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Profit Accumulated (USD)',
+                    data: Array(20).fill(0),
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
                 }
-                // Fetch and update investment data
-                async function updateInvestmentData() {
-                    try {
-                        const response = await fetch('/api/realtime_investment_data');
-                        const data = await response.json();
-
-                        if (!investmentChart) {
-                            initializeChart(data.initial_investment || 0);
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return `${context.dataset.label}: $${context.raw.toFixed(2)}`;
                         }
-
-                        if (data.error || data.investment_status !== 'active') {
-                            document.getElementById('investedAmount').textContent = '$0.00';
-                            document.getElementById('profitAmount').textContent = '$0.00';
-                            return;
-                        }
-
-                        // Update the chart data
-                        const timeProgress = data.time_progress / 100;
-                        const currentValue = data.initial_investment;
-                        const currentProfit = data.profit;
-
-                        // Shift all data points left and add new point at the end
-                        investmentChart.data.datasets[0].data.shift();
-                        investmentChart.data.datasets[0].data.push(currentValue);
-
-                        investmentChart.data.datasets[1].data.shift();
-                        investmentChart.data.datasets[1].data.push(currentProfit);
-
-                        investmentChart.update();
-
-                        // Update displayed information
-                        document.getElementById('investedAmount').textContent = `$${currentValue.toFixed(2)}`;
-                        document.getElementById('profitAmount').textContent = `$${currentProfit.toFixed(2)}`;
-
-                        const timeRemainingElement = document.getElementById('timeRemaining');
-                        if (timeRemainingElement) {
-                            timeRemainingElement.textContent =
-                                `Time remaining: ${data.hours_remaining}h ${data.minutes_remaining}m`;
-                        }
-
-                        // Update investment status text
-                        const statusElement = document.getElementById('currentInvestmentStatus');
-                        if (statusElement) {
-                            statusElement.textContent =
-                                `$${currentValue.toFixed(2)} invested (${data.time_progress.toFixed(1)}% complete)`;
-                        }
-                    } catch (error) {
-                        console.error('Error updating investment data:', error);
                     }
                 }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Time Progress' } },
+                y: {
+                    title: { display: true, text: 'Amount (USD)' },
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+                // Fetch and update investment data
+                async function updateInvestmentData() {
+    try {
+        console.log("Fetching real-time investment data...");
+        const response = await fetch('/api/realtime_investment_data');
+        const data = await response.json();
+        console.log("Data fetched:", data);
 
+        if (!investmentChart) {
+            console.log("Initializing chart...");
+            initializeChart(data.initial_investment || 0);
+        }
+
+        if (data.error || data.investment_status !== 'active') {
+            document.getElementById('investedAmount').textContent = '$0.00';
+            document.getElementById('profitAmount').textContent = '$0.00';
+            return;
+        }
+
+        // Update chart data
+        const currentValue = data.current_investment || data.current_value;
+        const currentProfit = data.profit;
+        const totalInvested = data.initial_investment;
+
+        // Shift all data points left and add new point at the end
+        investmentChart.data.datasets[0].data.shift();
+        investmentChart.data.datasets[0].data.push(currentValue);
+
+        investmentChart.data.datasets[1].data.shift();
+        investmentChart.data.datasets[1].data.push(currentProfit);
+
+        investmentChart.update();
+
+        // Update displayed information
+        document.getElementById('investedAmount').textContent = `$${totalInvested.toFixed(2)}`;
+        document.getElementById('profitAmount').textContent = `$${currentProfit.toFixed(2)}`;
+        
+        const timeRemainingElement = document.getElementById('timeRemaining');
+        if (timeRemainingElement) {
+            timeRemainingElement.textContent =
+                `Time remaining: ${data.hours_remaining}h ${data.minutes_remaining}m`;
+        }
+
+        // Update investment status text
+        const statusElement = document.getElementById('currentInvestmentStatus');
+        if (statusElement) {
+            statusElement.textContent =
+                `$${totalInvested.toFixed(2)} invested (${data.time_progress.toFixed(1)}% complete)`;
+        }
+    } catch (error) {
+        console.error("Error updating investment data:", error);
+    }
+}
                 // Initialize and start updates
                 initializeChart();
                 updateInvestmentData();
@@ -223,43 +223,57 @@
             <script>
                 // Function to update the investment status text
                 async function updateInvestmentData() {
-                        try {
-                            console.log("Fetching real-time investment data...");
-                            const response = await fetch('/api/realtime_investment_data');
-                            const data = await response.json();
-                            console.log("Data fetched:", data);
+    try {
+        console.log("Fetching real-time investment data...");
+        const response = await fetch('/api/realtime_investment_data');
+        const data = await response.json();
+        console.log("Data fetched:", data);
 
-                            if (!investmentChart) {
-                                console.log("Initializing chart...");
-                                initializeChart(data.initial_investment || 0);
-                            }
+        if (!investmentChart) {
+            console.log("Initializing chart...");
+            initializeChart(data.initial_investment || 0);
+        }
 
-                            if (data.error || data.investment_status !== 'active') {
-                                document.getElementById('investedAmount').textContent = '$0.00';
-                                document.getElementById('profitAmount').textContent = '$0.00';
-                                return;
-                            }
+        if (data.error || data.investment_status !== 'active') {
+            document.getElementById('investedAmount').textContent = '$0.00';
+            document.getElementById('profitAmount').textContent = '$0.00';
+            return;
+        }
 
-                            // Update chart data
-                            investmentChart.data.datasets[0].data.shift();
-                            investmentChart.data.datasets[0].data.push(data.current_value);
+        // Update chart data
+        const currentValue = data.current_investment || data.current_value;
+        const currentProfit = data.profit;
+        const totalInvested = data.initial_investment;
 
-                            investmentChart.data.datasets[1].data.shift();
-                            investmentChart.data.datasets[1].data.push(data.profit);
+        // Shift all data points left and add new point at the end
+        investmentChart.data.datasets[0].data.shift();
+        investmentChart.data.datasets[0].data.push(currentValue);
 
-                            investmentChart.update();
+        investmentChart.data.datasets[1].data.shift();
+        investmentChart.data.datasets[1].data.push(currentProfit);
 
-                            // Update DOM elements
-                            document.getElementById('investedAmount').textContent = `$${data.current_value.toFixed(2)}`;
-                            document.getElementById('profitAmount').textContent = `$${data.profit.toFixed(2)}`;
-                            document.getElementById('timeRemaining').textContent =
-                                `Time remaining: ${data.hours_remaining}h ${data.minutes_remaining}m`;
-                            document.getElementById('currentInvestmentStatus').textContent =
-                                `$${data.current_value.toFixed(2)} invested (${data.time_progress.toFixed(1)}% complete)`;
-                        } catch (error) {
-                            console.error("Error updating investment data:", error);
-                        }
-                    }
+        investmentChart.update();
+
+        // Update displayed information
+        document.getElementById('investedAmount').textContent = `$${totalInvested.toFixed(2)}`;
+        document.getElementById('profitAmount').textContent = `$${currentProfit.toFixed(2)}`;
+        
+        const timeRemainingElement = document.getElementById('timeRemaining');
+        if (timeRemainingElement) {
+            timeRemainingElement.textContent =
+                `Time remaining: ${data.hours_remaining}h ${data.minutes_remaining}m`;
+        }
+
+        // Update investment status text
+        const statusElement = document.getElementById('currentInvestmentStatus');
+        if (statusElement) {
+            statusElement.textContent =
+                `$${totalInvested.toFixed(2)} invested (${data.time_progress.toFixed(1)}% complete)`;
+        }
+    } catch (error) {
+        console.error("Error updating investment data:", error);
+    }
+}
                </script>
         
             <!-- Withdrawal Modal -->

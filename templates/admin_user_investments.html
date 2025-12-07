@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Investments - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            padding: 48px 0 0;
+            box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+            background-color: #343a40;
+        }
+        
+        .sidebar-sticky {
+            position: relative;
+            top: 0;
+            height: calc(100vh - 48px);
+            padding-top: .5rem;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        
+        .sidebar .nav-link {
+            color: #adb5bd;
+            font-weight: 500;
+            padding: 0.75rem 1rem;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            color: #fff;
+            background-color: rgba(255,255,255,.1);
+            border-left-color: #007bff;
+        }
+        
+        .sidebar .nav-link.active {
+            color: #fff;
+            background-color: rgba(255,255,255,.1);
+            border-left-color: #007bff;
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        main {
+            padding-top: 20px;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, .075);
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+        
+        .card-header {
+            background-color: #fff;
+            border-bottom: 2px solid #e9ecef;
+            font-weight: 600;
+            padding: 1rem 1.25rem;
+            border-radius: 10px 10px 0 0 !important;
+        }
+        
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: #495057;
+            background-color: #f8f9fa;
+        }
+        
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-completed {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-cancelled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .user-info-card {
+            border-left: 4px solid #007bff;
+        }
+        
+        .stat-card {
+            border-radius: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-icon {
+            font-size: 2.5rem;
+            opacity: 0.8;
+        }
+        
+        .back-btn {
+            margin-bottom: 20px;
+        }
+        
+        .investment-card {
+            border-left: 4px solid;
+            transition: all 0.3s;
+        }
+        
+        .investment-card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15) !important;
+        }
+        
+        .investment-card.active {
+            border-left-color: #28a745;
+        }
+        
+        .investment-card.completed {
+            border-left-color: #17a2b8;
+        }
+        
+        .investment-card.pending {
+            border-left-color: #ffc107;
+        }
+        
+        .badge-plan {
+            background-color: #6f42c1;
+            color: white;
+        }
+        
+        .badge-vip {
+            background-color: #fd7e14;
+            color: white;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #e9ecef;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -25px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #007bff;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 3px #007bff;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                position: static;
+                height: auto;
+                padding-top: 0;
+            }
+            
+            .sidebar-sticky {
+                height: auto;
+            }
+            
+            main {
+                padding-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('admin_dashboard') }}">
+                <i class="fas fa-crown"></i> Big Winners Admin
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="text-white me-3">
+                    <i class="fas fa-user-circle"></i> {{ session.get('user', 'Admin') }}
+                </span>
+                <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="sidebar-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_kyc_review') }}">
+                                <i class="fas fa-user-check"></i> KYC Review
+                                {% if pending_kyc_count > 0 %}
+                                <span class="badge bg-danger float-end">{{ pending_kyc_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_crypto_payments') }}">
+                                <i class="fab fa-bitcoin"></i> Crypto Payments
+                                {% if pending_crypto_count > 0 %}
+                                <span class="badge bg-danger float-end">{{ pending_crypto_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_card_payments') }}">
+                                <i class="fas fa-credit-card"></i> Card Payments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_pending_reviews') }}">
+                                <i class="fas fa-star"></i> Reviews
+                                {% if pending_reviews_count > 0 %}
+                                <span class="badge bg-danger float-end">{{ pending_reviews_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#">
+                                <i class="fas fa-chart-line"></i> User Investments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}#usersSection">
+                                <i class="fas fa-users"></i> All Users
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}#pendingPaymentsSection">
+                                <i class="fas fa-clock"></i> Pending Payments
+                                {% if pending_payments|length > 0 %}
+                                <span class="badge bg-warning float-end">{{ pending_payments|length }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <hr class="my-3" style="border-color: #495057;">
+                    
+                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Quick Stats</span>
+                    </h6>
+                    <ul class="nav flex-column mb-2">
+                        <li class="nav-item px-3 py-1">
+                            <small class="text-white-50">Total Users: {{ user_count }}</small>
+                        </li>
+                        <li class="nav-item px-3 py-1">
+                            <small class="text-white-50">Active Investors: {{ invested_count }}</small>
+                        </li>
+                        <li class="nav-item px-3 py-1">
+                            <small class="text-white-50">Total Invested: ${{ total_invested|round(2) }}</small>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">
+                        <i class="fas fa-chart-line text-primary"></i> 
+                        User Investment History
+                    </h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <!-- User Information Card -->
+                <div class="card user-info-card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-2 text-center">
+                                <div class="mb-3">
+                                    <i class="fas fa-user-circle fa-4x text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="col-md-10">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h4 class="mb-3">{{ user.username }}</h4>
+                                        <p class="mb-1">
+                                            <i class="fas fa-envelope text-muted"></i> 
+                                            <strong>Email:</strong> {{ user.email }}
+                                        </p>
+                                        <p class="mb-1">
+                                            <i class="fas fa-phone text-muted"></i> 
+                                            <strong>Phone:</strong> {{ user.phone }}
+                                        </p>
+                                        <p class="mb-1">
+                                            <i class="fas fa-map-marker-alt text-muted"></i> 
+                                            <strong>Country:</strong> {{ user.country }}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <div class="card stat-card bg-light mb-3">
+                                                    <div class="card-body text-center">
+                                                        <i class="fas fa-wallet stat-icon text-primary"></i>
+                                                        <h5 class="mt-2">${{ user.active_investment|default(0)|round(2) }}</h5>
+                                                        <p class="text-muted mb-0">Active Investment</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="card stat-card bg-light mb-3">
+                                                    <div class="card-body text-center">
+                                                        <i class="fas fa-chart-bar stat-icon text-success"></i>
+                                                        <h5 class="mt-2">${{ user.total_investment|default(0)|round(2) }}</h5>
+                                                        <p class="text-muted mb-0">Total Invested</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="card stat-card bg-light mb-3">
+                                                    <div class="card-body text-center">
+                                                        <i class="fas fa-hashtag stat-icon text-info"></i>
+                                                        <h5 class="mt-2">{{ user.investment_count|default(0) }}</h5>
+                                                        <p class="text-muted mb-0">Total Investments</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="card stat-card bg-light mb-3">
+                                                    <div class="card-body text-center">
+                                                        {% if user.kyc_status == 'verified' %}
+                                                            <i class="fas fa-check-circle stat-icon text-success"></i>
+                                                            <h5 class="mt-2">Verified</h5>
+                                                        {% elif user.kyc_status == 'pending' %}
+                                                            <i class="fas fa-clock stat-icon text-warning"></i>
+                                                            <h5 class="mt-2">Pending</h5>
+                                                        {% else %}
+                                                            <i class="fas fa-times-circle stat-icon text-danger"></i>
+                                                            <h5 class="mt-2">Not Verified</h5>
+                                                        {% endif %}
+                                                        <p class="text-muted mb-0">KYC Status</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Investment Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Total Value</h6>
+                                        <h3 class="mb-0">${{ total_invested|default(0)|round(2) }}</h3>
+                                    </div>
+                                    <i class="fas fa-dollar-sign fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Active</h6>
+                                        <h3 class="mb-0">{{ active_count|default(0) }}</h3>
+                                    </div>
+                                    <i class="fas fa-play-circle fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Completed</h6>
+                                        <h3 class="mb-0">{{ completed_count|default(0) }}</h3>
+                                    </div>
+                                    <i class="fas fa-check-circle fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="card-title mb-0">Pending</h6>
+                                        <h3 class="mb-0">{{ pending_count|default(0) }}</h3>
+                                    </div>
+                                    <i class="fas fa-clock fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Investments Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list"></i> Investment History ({{ investments|length }} records)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if investments %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Amount</th>
+                                        <th>Plan</th>
+                                        <th>Start Time</th>
+                                        <th>Maturity Time</th>
+                                        <th>Duration</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for investment in investments %}
+                                    <tr class="investment-row" data-id="{{ investment._id }}">
+                                        <td>{{ loop.index }}</td>
+                                        <td>
+                                            <strong class="text-primary">${{ investment.amount_usd|round(2) }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if investment.plan == 'vip' %}
+                                                <span class="badge badge-vip">
+                                                    <i class="fas fa-crown"></i> {{ investment.plan|upper }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-plan">
+                                                    <i class="fas fa-star"></i> {{ investment.plan|upper }}
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if investment.start_time %}
+                                                {{ investment.start_time.strftime('%Y-%m-%d %H:%M') }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if investment.maturity_time %}
+                                                {{ investment.maturity_time.strftime('%Y-%m-%d %H:%M') }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if investment.start_time and investment.maturity_time %}
+                                                {% set duration = (investment.maturity_time - investment.start_time) %}
+                                                {{ duration.total_seconds() // 3600 }} hours
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if investment.status == 'active' %}
+                                                <span class="status-badge status-active">
+                                                    <i class="fas fa-play-circle"></i> Active
+                                                </span>
+                                            {% elif investment.status == 'completed' %}
+                                                <span class="status-badge status-completed">
+                                                    <i class="fas fa-check-circle"></i> Completed
+                                                </span>
+                                            {% elif investment.status == 'pending' %}
+                                                <span class="status-badge status-pending">
+                                                    <i class="fas fa-clock"></i> Pending
+                                                </span>
+                                            {% elif investment.status == 'cancelled' %}
+                                                <span class="status-badge status-cancelled">
+                                                    <i class="fas fa-times-circle"></i> Cancelled
+                                                </span>
+                                            {% else %}
+                                                <span class="status-badge">{{ investment.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ investment.created_at.strftime('%Y-%m-%d') }}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-info view-investment-btn" 
+                                                    data-id="{{ investment._id }}">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                            {% if investment.status == 'active' %}
+                                            <button class="btn btn-sm btn-warning mark-complete-btn" 
+                                                    data-id="{{ investment._id }}">
+                                                <i class="fas fa-check"></i> Complete
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-line fa-4x text-muted mb-3"></i>
+                            <h4>No Investment History</h4>
+                            <p class="text-muted">This user hasn't made any investments yet.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Investment Timeline View (Optional) -->
+                {% if investments %}
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-stream"></i> Investment Timeline
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline">
+                            {% for investment in investments|sort(attribute='created_at', reverse=false) %}
+                            <div class="timeline-item">
+                                <div class="card investment-card {{ investment.status }} mb-3">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">
+                                                    ${{ investment.amount_usd|round(2) }} - 
+                                                    {{ investment.plan|upper }} Plan
+                                                    {% if investment.status == 'active' %}
+                                                    <span class="badge bg-success ms-2">Active</span>
+                                                    {% elif investment.status == 'completed' %}
+                                                    <span class="badge bg-info ms-2">Completed</span>
+                                                    {% endif %}
+                                                </h6>
+                                                <p class="text-muted mb-0">
+                                                    <small>
+                                                        <i class="far fa-calendar"></i> 
+                                                        Started: {{ investment.start_time.strftime('%Y-%m-%d %H:%M') if investment.start_time else 'N/A' }}
+                                                        {% if investment.maturity_time %}
+                                                        • Matures: {{ investment.maturity_time.strftime('%Y-%m-%d %H:%M') }}
+                                                        {% endif %}
+                                                    </small>
+                                                </p>
+                                            </div>
+                                            <div class="text-end">
+                                                <small class="text-muted d-block">
+                                                    Created: {{ investment.created_at.strftime('%Y-%m-%d') }}
+                                                </small>
+                                                <span class="badge bg-secondary">
+                                                    ID: {{ investment._id|string|truncate(8, True, '') }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Investment Details Modal -->
+    <div class="modal fade" id="investmentDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Investment Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="investmentDetailsContent">
+                    <!-- Content loaded by JavaScript -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // View investment details
+            $('.view-investment-btn').click(function() {
+                const investmentId = $(this).data('id');
+                loadInvestmentDetails(investmentId);
+            });
+
+            // Mark investment as complete
+            $('.mark-complete-btn').click(function() {
+                const investmentId = $(this).data('id');
+                if (confirm('Are you sure you want to mark this investment as complete?')) {
+                    markInvestmentComplete(investmentId);
+                }
+            });
+
+            // Load investment details via AJAX
+            function loadInvestmentDetails(investmentId) {
+                $('#investmentDetailsContent').html(`
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3">Loading investment details...</p>
+                    </div>
+                `);
+                
+                $.ajax({
+                    url: `/admin/investment_details/${investmentId}`,
+                    method: 'GET',
+                    success: function(data) {
+                        if (data.success) {
+                            const investment = data.investment;
+                            const html = `
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Investment Information</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <th>Amount:</th>
+                                                <td><strong class="text-primary">$${investment.amount_usd}</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <th>Plan:</th>
+                                                <td>
+                                                    <span class="badge ${investment.plan === 'vip' ? 'bg-warning' : 'bg-primary'}">
+                                                        ${investment.plan.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th>Status:</th>
+                                                <td>
+                                                    <span class="badge ${getStatusBadgeClass(investment.status)}">
+                                                        ${investment.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th>Created:</th>
+                                                <td>${formatDate(investment.created_at)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Timing Information</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <th>Start Time:</th>
+                                                <td>${formatDate(investment.start_time)}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Maturity Time:</th>
+                                                <td>${formatDate(investment.maturity_time)}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Duration:</th>
+                                                <td>
+                                                    ${investment.start_time && investment.maturity_time ? 
+                                                        calculateDuration(investment.start_time, investment.maturity_time) : 
+                                                        'N/A'}
+                                                </td>
+                                            </tr>
+                                            ${investment.withdrawn_at ? `
+                                                <tr>
+                                                    <th>Withdrawn At:</th>
+                                                    <td>${formatDate(investment.withdrawn_at)}</td>
+                                                </tr>
+                                            ` : ''}
+                                        </table>
+                                    </div>
+                                </div>
+                                ${investment.notes ? `
+                                    <div class="mt-3">
+                                        <h6>Notes:</h6>
+                                        <div class="alert alert-light">${investment.notes}</div>
+                                    </div>
+                                ` : ''}
+                            `;
+                            $('#investmentDetailsContent').html(html);
+                        } else {
+                            $('#investmentDetailsContent').html(`
+                                <div class="alert alert-danger">
+                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    ${data.error || 'Failed to load investment details'}
+                                </div>
+                            `);
+                        }
+                    },
+                    error: function() {
+                        $('#investmentDetailsContent').html(`
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                Failed to load investment details. Please try again.
+                            </div>
+                        `);
+                    }
+                });
+                
+                const modal = new bootstrap.Modal(document.getElementById('investmentDetailsModal'));
+                modal.show();
+            }
+
+            // Mark investment as complete
+            function markInvestmentComplete(investmentId) {
+                $.ajax({
+                    url: `/admin/mark_investment_complete/${investmentId}`,
+                    method: 'POST',
+                    success: function(data) {
+                        if (data.success) {
+                            alert('Investment marked as complete!');
+                            location.reload();
+                        } else {
+                            alert('Error: ' + (data.error || 'Failed to update investment'));
+                        }
+                    },
+                    error: function() {
+                        alert('Network error. Please try again.');
+                    }
+                });
+            }
+
+            // Helper functions
+            function formatDate(dateString) {
+                if (!dateString) return 'N/A';
+                const date = new Date(dateString);
+                return date.toLocaleString();
+            }
+
+            function calculateDuration(startTime, endTime) {
+                const start = new Date(startTime);
+                const end = new Date(endTime);
+                const diffMs = end - start;
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                return `${diffHours}h ${diffMinutes}m`;
+            }
+
+            function getStatusBadgeClass(status) {
+                switch(status) {
+                    case 'active': return 'bg-success';
+                    case 'completed': return 'bg-info';
+                    case 'pending': return 'bg-warning';
+                    case 'cancelled': return 'bg-danger';
+                    default: return 'bg-secondary';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

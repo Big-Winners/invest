@@ -478,17 +478,39 @@
                         <p><strong>Amount:</strong> KES equivalent of $${usdAmount}</p>
                     </div>
                 `;
-            } else {
-                // Get local currency info
-                let toCurrency = getLocalCurrency(country);
+            } else if (country === "USA" || country === "UK") {
+                // Show manual payment for USA and UK
                 manualInstructions = `
                     <div class="alert alert-info">
-                        <h6><i class="fas fa-university"></i> Bank Transfer / Mobile Money</h6>
-                        <p>Complete payment through your local bank or mobile money service.</p>
-                        <p><strong>Amount:</strong> Local currency equivalent of $${usdAmount}</p>
+                        <h6><i class="fas fa-university"></i> Bank Transfer</h6>
+                        <p>Complete payment through bank transfer using the details below.</p>
+                        <p><strong>Amount:</strong> $${usdAmount} USD</p>
                         <div id="manualInstructionsContent"></div>
                     </div>
                 `;
+            } else {
+                // For other countries, show manual payment options
+                const countriesWithManual = ["Uganda", "Rwanda", "Tanzania", "Zambia", "South Sudan"];
+                if (countriesWithManual.includes(country)) {
+                    let toCurrency = getLocalCurrency(country);
+                    manualInstructions = `
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-university"></i> Bank Transfer / Mobile Money</h6>
+                            <p>Complete payment through your local bank or mobile money service.</p>
+                            <p><strong>Amount:</strong> Local currency equivalent of $${usdAmount}</p>
+                            <div id="manualInstructionsContent"></div>
+                        </div>
+                    `;
+                } else {
+                    // Countries with only crypto and card (Canada, South Africa, Nigeria, UAE, Kuwait)
+                    manualInstructions = `
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Available Payment Methods</h6>
+                            <p>For ${country}, only cryptocurrency and card payments are available.</p>
+                            <p><strong>Amount:</strong> $${usdAmount} USD</p>
+                        </div>
+                    `;
+                }
             }
             
             document.getElementById('manualPaymentContent').innerHTML = manualInstructions;
@@ -507,6 +529,28 @@
             document.getElementById('proceedCryptoBtn').onclick = null;
             document.getElementById('proceedCardBtn').onclick = null;
             document.getElementById('proceedManualBtn').onclick = null;
+            
+            // Get countries that have manual payment option
+            const countriesWithManual = ["Kenya", "USA", "UK", "Uganda", "Rwanda", "Tanzania", "Zambia", "South Sudan"];
+            const countriesWithoutManual = ["Canada", "South Africa", "Nigeria", "UAE", "Kuwait"];
+            
+            // Hide/show manual tab based on country
+            const manualTab = document.getElementById('manual-tab');
+            const manualPane = document.getElementById('manual-tab-pane');
+            
+            if (countriesWithoutManual.includes(country)) {
+                manualTab.style.display = 'none';
+                manualPane.style.display = 'none';
+                
+                // Activate crypto tab if manual is hidden
+                document.getElementById('crypto-tab').classList.add('active');
+                document.getElementById('crypto-tab-pane').classList.add('active', 'show');
+                document.getElementById('card-tab').classList.remove('active');
+                document.getElementById('card-tab-pane').classList.remove('active', 'show');
+            } else {
+                manualTab.style.display = 'block';
+                manualPane.style.display = 'block';
+            }
             
             // Crypto tab click handler
             document.getElementById('proceedCryptoBtn').onclick = function() {
@@ -564,6 +608,7 @@
                 "Zambia": "ZMW",
                 "South Sudan": "SSP",
                 "USA": "USD",
+                "UK": "GBP",
                 "South Africa": "ZAR",
                 "Nigeria": "NGN",
                 "UAE": "AED",
@@ -585,65 +630,65 @@
         }
 
         // Process card payment for international users
-async function processCardPayment(country, usdAmount, plan) {
-    // Show loading
-    showBootstrapAlert('info', 'Initializing international card payment...');
-    
-    try {
-        const response = await fetch('/create_paystack_international_charge', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount_usd: usdAmount,
-                plan: plan,
-                country: country
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-            // Open Paystack payment page in new tab
-            const paymentWindow = window.open(data.authorization_url, '_blank', 'width=800,height=600');
+        async function processCardPayment(country, usdAmount, plan) {
+            // Show loading
+            showBootstrapAlert('info', 'Initializing international card payment...');
             
-            if (paymentWindow) {
-                // Check payment status every 5 seconds
-                const checkInterval = setInterval(async () => {
-                    try {
-                        const statusResponse = await fetch(`/check_paystack_international_payment/${data.reference}`);
-                        const statusData = await statusResponse.json();
-                        
-                        if (statusData.status === 'completed') {
-                            clearInterval(checkInterval);
-                            paymentWindow.close();
-                            
-                            showBootstrapAlert('success', 'Payment successful! Your investment is now active.');
-                            setTimeout(() => {
-                                window.location.href = '/dashboard';
-                            }, 2000);
-                        }
-                    } catch (error) {
-                        console.error('Error checking payment status:', error);
-                    }
-                }, 5000);
+            try {
+                const response = await fetch('/create_paystack_international_charge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount_usd: usdAmount,
+                        plan: plan,
+                        country: country
+                    })
+                });
                 
-                // Clear interval after 10 minutes
-                setTimeout(() => clearInterval(checkInterval), 600000);
-            } else {
-                // If popup blocked, redirect in same window
-                showBootstrapAlert('warning', 'Popup blocked. Redirecting to payment page...');
-                setTimeout(() => {
-                    window.location.href = data.authorization_url;
-                }, 1000);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Open Paystack payment page in new tab
+                    const paymentWindow = window.open(data.authorization_url, '_blank', 'width=800,height=600');
+                    
+                    if (paymentWindow) {
+                        // Check payment status every 5 seconds
+                        const checkInterval = setInterval(async () => {
+                            try {
+                                const statusResponse = await fetch(`/check_paystack_international_payment/${data.reference}`);
+                                const statusData = await statusResponse.json();
+                                
+                                if (statusData.status === 'completed') {
+                                    clearInterval(checkInterval);
+                                    paymentWindow.close();
+                                    
+                                    showBootstrapAlert('success', 'Payment successful! Your investment is now active.');
+                                    setTimeout(() => {
+                                        window.location.href = '/dashboard';
+                                    }, 2000);
+                                }
+                            } catch (error) {
+                                console.error('Error checking payment status:', error);
+                            }
+                        }, 5000);
+                        
+                        // Clear interval after 10 minutes
+                        setTimeout(() => clearInterval(checkInterval), 600000);
+                    } else {
+                        // If popup blocked, redirect in same window
+                        showBootstrapAlert('warning', 'Popup blocked. Redirecting to payment page...');
+                        setTimeout(() => {
+                            window.location.href = data.authorization_url;
+                        }, 1000);
+                    }
+                } else {
+                    showBootstrapAlert('danger', data.message || 'Failed to initialize card payment');
+                }
+            } catch (error) {
+                showBootstrapAlert('danger', 'Network error. Please try again.');
+                console.error('Card payment error:', error);
             }
-        } else {
-            showBootstrapAlert('danger', data.message || 'Failed to initialize card payment');
         }
-    } catch (error) {
-        showBootstrapAlert('danger', 'Network error. Please try again.');
-        console.error('Card payment error:', error);
-    }
-}
 
         // Show crypto payment modal
         function showCryptoPaymentModal(country, usdAmount, plan) {
@@ -820,16 +865,19 @@ async function processCardPayment(country, usdAmount, plan) {
             // Determine local currency
             let toCurrency = getLocalCurrency(country);
             
-            // Convert USD to local
-            let amountLocal = 0;
+            // Convert USD to local (except for USA which uses USD)
+            let amountLocal = usdAmount;
             let rate = 1;
-            try {
-                const resp = await fetch(`/convert_currency?amount=${usdAmount}&from=USD&to=${toCurrency}`);
-                const data = await resp.json();
-                amountLocal = data.converted;
-                rate = data.rate;
-            } catch (e) { 
-                amountLocal = usdAmount; 
+            
+            if (country !== "USA" && country !== "UK") {
+                try {
+                    const resp = await fetch(`/convert_currency?amount=${usdAmount}&from=USD&to=${toCurrency}`);
+                    const data = await resp.json();
+                    amountLocal = data.converted;
+                    rate = data.rate;
+                } catch (e) { 
+                    amountLocal = usdAmount; 
+                }
             }
 
             // Build payment instructions
@@ -946,6 +994,41 @@ async function processCardPayment(country, usdAmount, plan) {
                             <li>Enter <b>254769823817</b></li>
                             <li>Enter amount and your m-Gurush pin</li>
                         </ol>
+                    </div>
+                `;
+            } else if (country === 'UK') {
+                instructions = `
+                    <h6>Pay <b>${amountLocal.toFixed(2)} ${toCurrency}</b> (≈ $${usdAmount} USD)</h6>
+                    <div class="alert alert-info">
+                        <b>Bank Transfer Instructions (UK):</b>
+                        <ul class="mb-0">
+                            <li><strong>Bank name:</strong> Barclays</li>
+                            <li><strong>Transfer type:</strong> Local transfer</li>
+                            <li><strong>Sort code:</strong> 231486</li>
+                            <li><strong>Account number:</strong> 15875800</li>
+                            <li><strong>Beneficiary name:</strong> Joakim Musyoki</li>
+                            <li><strong>Amount:</strong> GBP equivalent of $${usdAmount} USD</li>
+                            <li><strong>Reference:</strong> ${selectedPlan.toUpperCase()}_${Date.now().toString().slice(-6)}</li>
+                        </ul>
+                    </div>
+                `;
+            } else if (country === 'USA') {
+                instructions = `
+                    <h6>Pay <b>${amountLocal.toFixed(2)} ${toCurrency}</b></h6>
+                    <div class="alert alert-info">
+                        <b>Bank Transfer Instructions (USA):</b>
+                        <ul class="mb-0">
+                            <li><strong>Bank name:</strong> Citibank</li>
+                            <li><strong>Transfer type:</strong> Local transfer</li>
+                            <li><strong>Bank address:</strong> 111 Wall Street New York, NY 10043 USA</li>
+                            <li><strong>Routing (ABA):</strong> 031100209</li>
+                            <li><strong>SWIFT code:</strong> CITIUS33</li>
+                            <li><strong>Account number:</strong> 70580370002083164</li>
+                            <li><strong>Account type:</strong> CHECKING</li>
+                            <li><strong>Beneficiary name:</strong> Joakim Musyoki</li>
+                            <li><strong>Amount:</strong> $${usdAmount} USD</li>
+                            <li><strong>Reference:</strong> ${selectedPlan.toUpperCase()}_${Date.now().toString().slice(-6)}</li>
+                        </ul>
                     </div>
                 `;
             } else {
@@ -1087,8 +1170,10 @@ async function processCardPayment(country, usdAmount, plan) {
                         <option value="Tanzania">Tanzania</option>
                         <option value="Zambia">Zambia</option>
                         <option value="South Sudan">South Sudan</option>
-                        <!-- New countries with crypto payments -->
+                        <!-- Countries with manual payment option -->
                         <option value="USA">United States (USA)</option>
+                        <option value="UK">United Kingdom (UK)</option>
+                        <!-- Countries with only crypto and card -->
                         <option value="Canada">Canada</option>
                         <option value="South Africa">South Africa</option>
                         <option value="Nigeria">Nigeria</option>
@@ -1102,7 +1187,9 @@ async function processCardPayment(country, usdAmount, plan) {
                             • All Countries: Cryptocurrency (BTC, USDT)<br>
                             • All Countries: International Card Payment (Visa, Mastercard, Amex)<br>
                             • Kenya: MPesa via Paystack<br>
-                            • Other Countries: Bank Transfer / Mobile Money
+                            • USA & UK: Bank Transfer<br>
+                            • Other African Countries: Bank Transfer / Mobile Money<br>
+                            • Canada, South Africa, Nigeria, UAE, Kuwait: Only Crypto & Card
                         </small>
                     </div>
                 </div>
@@ -1180,8 +1267,7 @@ async function processCardPayment(country, usdAmount, plan) {
                             </div>
                             
                             <!-- Card Payment Tab -->
-                           <!-- Card Payment Tab -->
-<div class="tab-pane fade" id="card-tab-pane" role="tabpanel">
+                           <div class="tab-pane fade" id="card-tab-pane" role="tabpanel">
     <h6><i class="fas fa-credit-card"></i> International Card Payment:</h6>
     <div class="alert alert-success">
         <i class="fas fa-globe-americas"></i>

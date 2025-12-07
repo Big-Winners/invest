@@ -360,6 +360,96 @@
         {% endif %}
     </div>
 
+    <!-- In the main content area of admin_dashboard.html, add this card -->
+<div class="col-md-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-chart-line"></i> Investment Overview</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-6 mb-3">
+                    <div class="border rounded p-3">
+                        <h3 class="text-success">${{ total_invested|round(2) }}</h3>
+                        <small class="text-muted">Total Invested</small>
+                    </div>
+                </div>
+                <div class="col-6 mb-3">
+                    <div class="border rounded p-3">
+                        <h3 class="text-info">{{ invested_count }}</h3>
+                        <small class="text-muted">Active Investors</small>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <a href="{{ url_for('admin_dashboard') }}#usersSection" 
+                       class="btn btn-outline-primary btn-sm w-100">
+                        <i class="fas fa-eye"></i> View All Investors
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- In admin_dashboard.html, in the users table section -->
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Country</th>
+            <th>KYC Status</th>
+            <th>Investment Status</th>
+            <th>Total Invested</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in invested_users %}
+        <tr>
+            <td>{{ u.username }}</td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.phone }}</td>
+            <td>{{ u.country }}</td>
+            <td>
+                {% if u.kyc_status == 'verified' %}
+                <span class="badge bg-success">Verified</span>
+                {% elif u.kyc_status == 'pending' %}
+                <span class="badge bg-warning">Pending</span>
+                {% else %}
+                <span class="badge bg-danger">Not Verified</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if u.investment_status == 'active' %}
+                <span class="badge bg-success">Active</span>
+                {% elif u.investment_status == 'pending' %}
+                <span class="badge bg-warning">Pending</span>
+                {% elif u.investment_status == 'completed' %}
+                <span class="badge bg-info">Completed</span>
+                {% else %}
+                <span class="badge bg-secondary">None</span>
+                {% endif %}
+            </td>
+            <td>${{ u.total_investment|default(0)|round(2) }}</td>
+            <td>
+                <!-- ADD THIS BUTTON -->
+                <a href="{{ url_for('admin_user_investments', user_id=u._id) }}" 
+                   class="btn btn-sm btn-info" title="View Investments">
+                    <i class="fas fa-chart-line"></i> Investments
+                </a>
+                
+                <!-- Existing action buttons -->
+                <button class="btn btn-sm btn-warning" onclick="sendEmail('{{ u.email }}')">
+                    <i class="fas fa-envelope"></i> Email
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
     <!-- Invested Users Table -->
     <div class="container invested-users-table mb-5">
         <div class="d-flex justify-content-between align-items-center mb-4">

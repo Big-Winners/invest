@@ -176,7 +176,12 @@ def verify_reset_token(token, expiration=3600):
         return email
     except Exception:
         return False
-    
+
+@app.route('/admin/user/<user_id>/investments')
+def admin_user_investments(user_id):
+    # show investments for this user
+    return render_template("admin_user_investments.html", user_id=user_id)
+
 # Add KYC collections
 kyc_collection = db["kyc_verifications"]
 
@@ -443,6 +448,9 @@ def dashboard():
     # Handle different investment statuses
     investment_status = user.get("investment_status", "none")
     
+    # Get total investment
+    total_investment = float(user.get("initial_investment", 0))
+    
     # For pending crypto payments, show different message
     if investment_status == "pending_crypto_payment":
         # Check for crypto payment
@@ -452,9 +460,10 @@ def dashboard():
         })
         
         if crypto_payment:
+            pending_amount = float(crypto_payment.get('amount_usd', 0))
             session.update({
-                "investment": f"${crypto_payment.get('amount_usd', 0):.2f} - Pending Approval",
-                "total_investment": f"${crypto_payment.get('amount_usd', 0):.2f}",
+                "investment": f"${pending_amount:.2f} - Pending Approval",
+                "total_investment": f"${total_investment:.2f}",
                 "investment_status": "pending_crypto_payment",
                 "time_progress": 0,
                 "time_remaining": "Awaiting Approval"
@@ -462,7 +471,7 @@ def dashboard():
         else:
             session.update({
                 "investment": "Payment Pending",
-                "total_investment": "$0.00",
+                "total_investment": f"${total_investment:.2f}",
                 "investment_status": "pending_crypto_payment",
                 "time_progress": 0,
                 "time_remaining": "Awaiting Approval"
@@ -480,11 +489,10 @@ def dashboard():
         minutes = minutes // 60
         time_remaining = f"{hours}h {minutes}m"
         
-        initial_investment = float(user.get("initial_investment", 0))
         session.update(
             {
-                "investment": f"${initial_investment:.2f} invested",
-                "total_investment": f"${initial_investment:.2f}",
+                "investment": f"${total_investment:.2f} invested",
+                "total_investment": f"${total_investment:.2f}",
                 "investment_status": investment_status,
                 "time_progress": round(time_progress * 100, 1),
                 "time_remaining": time_remaining,
@@ -492,11 +500,10 @@ def dashboard():
         )
     else:
         # No active investment
-        initial_investment = float(user.get("initial_investment", 0))
         session.update(
             {
                 "investment": "No active investment",
-                "total_investment": f"${initial_investment:.2f}",
+                "total_investment": f"${total_investment:.2f}",
                 "investment_status": investment_status,
                 "time_progress": 0,
                 "time_remaining": "Not started",
@@ -742,18 +749,28 @@ def paystack_callback():
                 flash("Invalid user ID", "error")
                 return redirect(url_for("dashboard"))
 
-            # Proceed with updates
+            # Get current user data
+            user = users_collection.find_one({"_id": user_id_obj})
+            if not user:
+                flash("User not found", "error")
+                return redirect(url_for("dashboard"))
+            
+            # Calculate new investment amount
             amount_usd = float(metadata.get("amount_usd", 0))
+            current_investment = float(user.get("initial_investment", 0))
+            new_investment = current_investment + amount_usd
+            
+            # Reset investment timer and update amount
             investment_time = datetime.now(timezone.utc)
             update_data = {
-                "initial_investment": amount_usd,
+                "initial_investment": new_investment,
                 "investment_time": investment_time,
                 "investment_status": "active"
             }
 
             # Update MongoDB
             result = users_collection.update_one(
-                {"_id": user_id_obj},  # Use the validated ObjectId
+                {"_id": user_id_obj},
                 {"$set": update_data}
             )
             print(f"Updated user {user_id} with: {update_data}")
@@ -764,12 +781,12 @@ def paystack_callback():
             # Update session if the current user matches
             if session.get("user_id") == user_id:
                 session.update({
-                    "investment": f"${amount_usd:.2f} invested",
-                    "total_investment": f"${amount_usd:.2f}",
+                    "investment": f"${new_investment:.2f} invested",
+                    "total_investment": f"${new_investment:.2f}",
                     "investment_status": "active"
                 })
 
-            flash("Payment successful! Your investment is now active.", "success")
+            flash(f"Payment successful! Added ${amount_usd:.2f} to your investment. Total: ${new_investment:.2f}", "success")
             return redirect(url_for("dashboard"))
 
         flash("Payment verification failed!", "error")
@@ -779,6 +796,7 @@ def paystack_callback():
         print(f"Error in paystack_callback: {e}")
         flash("Payment processing error.", "error")
         return redirect(url_for("dashboard"))
+    
 @app.route("/account-settings", methods=["GET", "POST"])
 def account_settings():
     if "user_email" not in session:
@@ -1094,7 +1112,7 @@ def investment_details():
 
 @app.route("/api/realtime_investment_data", methods=["GET"])
 def realtime_investment_data():
-    """API endpoint for real-time investment data with timezone-aware datetime handling"""
+    """API endpoint for real-time investment data with cumulative investment tracking"""
     if "user_email" not in session:
         return jsonify({"error": "User not logged in!"}), 401
 
@@ -1114,25 +1132,20 @@ def realtime_investment_data():
         
         if crypto_payment:
             amount_usd = float(crypto_payment.get("amount_usd", 0))
+            # Get existing investment
+            current_investment = float(user.get("initial_investment", 0))
+            total_investment = current_investment + amount_usd
+            
             return jsonify({
                 "profit": 0.0,
-                "initial_investment": amount_usd,
-                "current_value": amount_usd,
+                "initial_investment": current_investment,
+                "current_investment": total_investment,
+                "new_investment": amount_usd,
                 "time_progress": 0.0,
                 "hours_remaining": 0,
                 "minutes_remaining": 0,
                 "investment_status": "pending_crypto_payment",
                 "pending_message": "Payment awaiting admin approval"
-            }), 200
-        else:
-            return jsonify({
-                "profit": 0.0,
-                "initial_investment": 0.0,
-                "current_value": 0.0,
-                "time_progress": 0.0,
-                "hours_remaining": 0,
-                "minutes_remaining": 0,
-                "investment_status": "pending_crypto_payment"
             }), 200
     
     # Handle missing investment_time
@@ -1142,7 +1155,8 @@ def realtime_investment_data():
         return jsonify({
             "profit": 0.0,
             "initial_investment": initial_investment,
-            "current_value": initial_investment,
+            "current_investment": initial_investment,
+            "new_investment": 0.0,
             "time_progress": 0.0,
             "hours_remaining": 0,
             "minutes_remaining": 0,
@@ -1152,7 +1166,7 @@ def realtime_investment_data():
     try:
         # Calculate investment progress with timezone-aware datetimes
         investment_time = ensure_utc_datetime(investment_time)
-        initial_investment = float(user.get("initial_investment", 0.0))
+        total_investment = float(user.get("initial_investment", 0.0))
         current_time = datetime.now(timezone.utc)
         maturity_time = investment_time + timedelta(hours=6)
 
@@ -1173,8 +1187,8 @@ def realtime_investment_data():
         time_progress = elapsed_time / total_duration
 
         # Calculate investment value (400% return over 6 hours)
-        current_value = initial_investment * (1 + 4 * time_progress)
-        profit = current_value - initial_investment
+        current_value = total_investment * (1 + 4 * time_progress)
+        profit = current_value - total_investment
 
         # Calculate time remaining
         time_left = max(maturity_time - current_time, timedelta(0))
@@ -1183,8 +1197,9 @@ def realtime_investment_data():
 
         return jsonify({
             "profit": round(profit, 2),
-            "initial_investment": round(initial_investment, 2),
-            "current_value": round(current_value, 2),
+            "initial_investment": round(total_investment, 2),
+            "current_investment": round(current_value, 2),
+            "new_investment": 0.0,
             "time_progress": round(time_progress * 100, 2),
             "hours_remaining": hours_remaining,
             "minutes_remaining": minutes_remaining,
@@ -1338,29 +1353,38 @@ def admin_dashboard():
         pending_reviews_count=pending_reviews_collection.count_documents({"status": "pending"})
     )
 
-# Example route to approve a manual payment
+# route to approve a manual payment
 @app.route("/admin/approve_payment/<payment_id>", methods=["POST"])
 @admin_required
 def approve_payment(payment_id):
     payment = db["pending_manual_payments"].find_one({"_id": ObjectId(payment_id)})
     if not payment:
         abort(404)
-    # Update user investment
+    
+    # Get current user investment
+    user = users_collection.find_one({"_id": ObjectId(payment["user_id"])})
+    current_investment = float(user.get("initial_investment", 0))
+    new_investment = current_investment + float(payment["amount_usd"])
+    
+    # Update user investment (add to existing)
     users_collection.update_one(
         {"_id": ObjectId(payment["user_id"])},
         {"$set": {
             "investment_status": "active",
-            "initial_investment": payment["amount_usd"],
+            "initial_investment": new_investment,
             "investment_time": datetime.now(timezone.utc)
         }}
     )
+    
     # Mark payment as approved
     db["pending_manual_payments"].update_one(
         {"_id": ObjectId(payment_id)},
         {"$set": {"status": "approved", "approved_at": datetime.now(timezone.utc)}}
     )
-    flash("Payment approved and investment activated!", "success")
+    
+    flash(f"Payment approved! Added ${payment['amount_usd']:.2f} to investment. Total: ${new_investment:.2f}", "success")
     return redirect(url_for("admin_dashboard"))
+
 @app.route("/admin/reject_payment/<payment_id>", methods=["POST"])
 @admin_required
 def reject_payment(payment_id):
@@ -2272,17 +2296,22 @@ def approve_crypto_payment(payment_id):
             }}
         )
         
-        # Activate user investment
+        # Get current user investment
+        user = users_collection.find_one({"_id": ObjectId(payment["user_id"])})
+        current_investment = float(user.get("initial_investment", 0))
+        new_investment = current_investment + float(payment["amount_usd"])
+        
+        # Activate user investment (add to existing)
         users_collection.update_one(
             {"_id": ObjectId(payment["user_id"])},
             {"$set": {
                 "investment_status": "active",
-                "initial_investment": payment["amount_usd"],
+                "initial_investment": new_investment,
                 "investment_time": datetime.now(timezone.utc)
             }}
         )
         
-        flash("Crypto payment approved and investment activated!", "success")
+        flash(f"Crypto payment approved! Added ${payment['amount_usd']:.2f} to investment. Total: ${new_investment:.2f}", "success")
         return redirect(url_for("admin_crypto_payments"))
         
     except Exception as e:
@@ -2446,17 +2475,19 @@ def create_paypal_order():
     
 @app.route("/process_card_payment", methods=["POST"])
 def process_card_payment():
-    """Process card payment with PayPal - Fixed version with database recording"""
+    """Process card payment with PayPal - Clean rewritten version (no logic removed)."""
+
+    # Ensure user is logged in
     if "user_email" not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401
-    
+
     try:
         data = request.get_json()
-        
-        # Debug: Print received data (remove in production)
+
+        # Debug logging
         print(f"Card payment data received: {data}")
-        
-        # Get card details from the request
+
+        # Extract card details
         card_details = {
             "type": data.get("card_type", "visa").lower(),
             "number": data.get("card_number", "").replace(" ", ""),
@@ -2466,49 +2497,60 @@ def process_card_payment():
             "first_name": data.get("first_name", ""),
             "last_name": data.get("last_name", "")
         }
-        
-        print(f"Card details: {card_details['type']}, Last 4: {card_details['number'][-4:] if card_details['number'] else 'N/A'}")
-        
+
+        print(
+            f"Card details: {card_details['type']}, "
+            f"Last 4: {card_details['number'][-4:] if card_details['number'] else 'N/A'}"
+        )
+
         # Validate card details
         validation_errors = []
+
         if not card_details["number"]:
             validation_errors.append("Card number is required")
+
         if len(card_details["number"]) not in [13, 14, 15, 16]:
             validation_errors.append("Invalid card number length")
+
         if not card_details["expire_month"] or not card_details["expire_year"]:
             validation_errors.append("Expiry date is required")
+
         if not card_details["cvv2"]:
             validation_errors.append("CVV is required")
-        
+
         if validation_errors:
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": "Invalid card details: " + ", ".join(validation_errors)
             }), 400
-        
+
+        # Payment metadata
         amount_usd = float(data.get("amount_usd", 0))
         plan = data.get("plan", "unknown")
         email = data.get("email", session["user_email"])
-        
+
         if amount_usd <= 0:
             return jsonify({"status": "error", "message": "Invalid amount"}), 400
-        
-        # Get merchant email
+
+        # Merchant email
         merchant_email = os.getenv("PAYPAL_MERCHANT_EMAIL", "")
-        
         if not merchant_email:
             print("ERROR: PAYPAL_MERCHANT_EMAIL not set in environment")
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": "Payment processor configuration error. Please try another payment method or contact support."
             }), 400
-        
-        # Generate unique order ID
-        order_id = f"BW_CARD_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
-        
+
+        # Generate order ID
+        order_id = (
+            "BW_CARD_"
+            + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+            + str(random.randint(1000, 9999))
+        )
+
         print(f"Creating PayPal payment for ${amount_usd}, Order ID: {order_id}")
-        
-        # Save card payment record BEFORE processing (for tracking)
+
+        # Save initial payment record
         card_payment_record = {
             "user_id": session["user_id"],
             "email": session["user_email"],
@@ -2525,14 +2567,13 @@ def process_card_payment():
             "status": "processing",
             "created_at": datetime.now(timezone.utc),
             "ip_address": request.remote_addr,
-            "user_agent": request.headers.get('User-Agent', '')
+            "user_agent": request.headers.get("User-Agent", "")
         }
-        
-        # Insert into card_payments collection
+
         card_payment_id = card_payments_collection.insert_one(card_payment_record).inserted_id
         print(f"Card payment record created: {card_payment_id}")
-        
-        # Create PayPal payment with card
+
+        # Prepare PayPal payment payload
         payment_data = {
             "intent": "sale",
             "payer": {
@@ -2563,21 +2604,19 @@ def process_card_payment():
                 },
                 "description": f"Big Winners {plan.capitalize()} Plan Investment",
                 "invoice_number": order_id,
-                "payee": {
-                    "email": merchant_email
-                }
+                "payee": {"email": merchant_email}
             }]
         }
-        
+
         print(f"Payment data prepared, merchant email: {merchant_email}")
-        
+
+        # Create PayPal payment
         try:
             payment = paypalrestsdk.Payment(payment_data)
-            
+
             if payment.create():
                 print(f"PayPal payment created successfully: {payment.id}")
-                
-                # Update card payment record with PayPal ID
+
                 card_payments_collection.update_one(
                     {"_id": card_payment_id},
                     {"$set": {
@@ -2585,17 +2624,16 @@ def process_card_payment():
                         "status": "created"
                     }}
                 )
-                
+
                 # Execute payment
                 if payment.execute({"payer_id": payment.payer.payer_info.payer_id}):
                     print(f"Payment executed successfully: {payment.id}")
-                    
-                    # Get transaction details
+
                     transaction_id = ""
                     if payment.transactions and payment.transactions[0].related_resources:
                         transaction_id = payment.transactions[0].related_resources[0].sale.id
-                    
-                    # Update card payment record with success
+
+                    # Mark payment as completed
                     card_payments_collection.update_one(
                         {"_id": card_payment_id},
                         {"$set": {
@@ -2605,8 +2643,8 @@ def process_card_payment():
                             "paypal_response": payment.to_dict()
                         }}
                     )
-                    
-                    # Also save to paypal_payments_collection for backward compatibility
+
+                    # Save to PayPal payments collection
                     paypal_payments_collection.insert_one({
                         "user_id": session["user_id"],
                         "email": session["user_email"],
@@ -2624,24 +2662,28 @@ def process_card_payment():
                         "completed_at": datetime.now(timezone.utc),
                         "transaction_id": transaction_id
                     })
-                    
+
                     # Update user investment
+                    user = users_collection.find_one({"_id": ObjectId(session["user_id"])})
+                    current_investment = float(user.get("initial_investment", 0))
+                    new_investment = current_investment + amount_usd
+
                     users_collection.update_one(
                         {"_id": ObjectId(session["user_id"])},
                         {"$set": {
                             "investment_status": "active",
-                            "initial_investment": amount_usd,
+                            "initial_investment": new_investment,
                             "investment_time": datetime.now(timezone.utc)
                         }}
                     )
-                    
+
                     # Update session
                     session.update({
                         "investment": f"${amount_usd:.2f} invested",
                         "total_investment": f"${amount_usd:.2f}",
                         "investment_status": "active"
                     })
-                    
+
                     # Send confirmation email
                     try:
                         send_payment_confirmation_email(
@@ -2654,7 +2696,7 @@ def process_card_payment():
                         )
                     except Exception as email_error:
                         print(f"Email error (non-critical): {email_error}")
-                    
+
                     return jsonify({
                         "status": "success",
                         "message": "Payment successful! Your investment is now active.",
@@ -2664,45 +2706,44 @@ def process_card_payment():
                         "order_id": order_id,
                         "payment_id": str(card_payment_id)
                     })
-                else:
-                    print(f"Payment execution failed: {payment.error}")
-                    
-                    # Update card payment record with failure
-                    card_payments_collection.update_one(
-                        {"_id": card_payment_id},
-                        {"$set": {
-                            "status": "failed",
-                            "error_message": str(payment.error),
-                            "failed_at": datetime.now(timezone.utc)
-                        }}
-                    )
-                    
-                    return jsonify({
-                        "status": "error", 
-                        "message": f"Payment failed: {payment.error.get('message', 'Unknown error')}"
-                    }), 400
-            else:
-                print(f"Payment creation failed: {payment.error}")
-                
-                # Update card payment record with creation failure
+
+                # Payment execution failed
+                print(f"Payment execution failed: {payment.error}")
+
                 card_payments_collection.update_one(
                     {"_id": card_payment_id},
                     {"$set": {
-                        "status": "creation_failed",
+                        "status": "failed",
                         "error_message": str(payment.error),
                         "failed_at": datetime.now(timezone.utc)
                     }}
                 )
-                
+
                 return jsonify({
-                    "status": "error", 
-                    "message": f"Payment creation failed: {payment.error.get('message', 'Unknown error')}"
+                    "status": "error",
+                    "message": f"Payment failed: {payment.error.get('message', 'Unknown error')}"
                 }), 400
-                
+
+            # Payment creation failed
+            print(f"Payment creation failed: {payment.error}")
+
+            card_payments_collection.update_one(
+                {"_id": card_payment_id},
+                {"$set": {
+                    "status": "creation_failed",
+                    "error_message": str(payment.error),
+                    "failed_at": datetime.now(timezone.utc)
+                }}
+            )
+
+            return jsonify({
+                "status": "error",
+                "message": f"Payment creation failed: {payment.error.get('message', 'Unknown error')}"
+            }), 400
+
         except Exception as paypal_error:
             print(f"PayPal processing exception: {paypal_error}")
-            
-            # Update card payment record with exception
+
             card_payments_collection.update_one(
                 {"_id": card_payment_id},
                 {"$set": {
@@ -2711,18 +2752,19 @@ def process_card_payment():
                     "failed_at": datetime.now(timezone.utc)
                 }}
             )
-            
+
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": f"Payment processing error: {str(paypal_error)}"
             }), 400
-            
+
     except Exception as e:
         print(f"General error in process_card_payment: {e}")
         import traceback
         traceback.print_exc()
+
         return jsonify({
-            "status": "error", 
+            "status": "error",
             "message": f"Payment processing error: {str(e)}"
         }), 500
 
@@ -2773,12 +2815,17 @@ def paypal_success():
                     }}
                 )
                 
-                # Update user investment
+                # Get current user investment
+                user = users_collection.find_one({"_id": ObjectId(payment_data["user_id"])})
+                current_investment = float(user.get("initial_investment", 0))
+                new_investment = current_investment + amount_usd
+                
+                # Update user investment (add to existing)
                 users_collection.update_one(
                     {"_id": ObjectId(payment_data["user_id"])},
                     {"$set": {
                         "investment_status": "active",
-                        "initial_investment": amount_usd,
+                        "initial_investment": new_investment,
                         "investment_time": datetime.now(timezone.utc)
                     }}
                 )
@@ -2786,12 +2833,12 @@ def paypal_success():
                 # Update session if this is the current user
                 if session.get("user_id") == payment_data["user_id"]:
                     session.update({
-                        "investment": f"${amount_usd:.2f} invested",
-                        "total_investment": f"${amount_usd:.2f}",
+                        "investment": f"${new_investment:.2f} invested",
+                        "total_investment": f"${new_investment:.2f}",
                         "investment_status": "active"
                     })
                 
-                flash("Payment successful! Your investment is now active.", "success")
+                flash(f"Payment successful! Added ${amount_usd:.2f} to your investment. Total: ${new_investment:.2f}", "success")
                 
                 # Send confirmation email
                 try:
@@ -2816,7 +2863,6 @@ def paypal_success():
         print(f"Error in paypal_success: {e}")
         flash("Payment processing error", "error")
         return redirect(url_for("dashboard"))
-
 
 @app.route("/paypal/cancel")
 def paypal_cancel():
@@ -2869,6 +2915,10 @@ def send_payment_confirmation_email(email, username, amount, plan, reference, pa
         else:
             payment_method_text = "Payment"
         
+        # Get user to show total investment
+        user = users_collection.find_one({"email": email})
+        total_investment = float(user.get("initial_investment", 0)) if user else amount
+        
         msg = Message(
             f"Payment Confirmation - {payment_method_text} - Big Winners",
             recipients=[email],
@@ -2880,6 +2930,7 @@ def send_payment_confirmation_email(email, username, amount, plan, reference, pa
         <p>Dear {username},</p>
         <p>Your {payment_method_text.lower()} of <strong>${amount:.2f} USD</strong> for the <strong>{plan.capitalize()} Plan</strong> has been successfully processed.</p>
         <p><strong>Reference:</strong> {reference}</p>
+        <p><strong>Your total investment is now:</strong> ${total_investment:.2f}</p>
         <p>Your investment is now active and will start earning returns immediately.</p>
         <p>You can track your investment progress in your dashboard.</p>
         <p><strong>Thank you for investing with Big Winners!</strong></p>
@@ -3163,12 +3214,17 @@ def paystack_international_callback():
                 }}
             )
             
-            # Activate user investment
+            # Get current user investment
+            user = users_collection.find_one({"_id": ObjectId(payment["user_id"])})
+            current_investment = float(user.get("initial_investment", 0))
+            new_investment = current_investment + float(payment["amount_usd"])
+            
+            # Activate user investment (add to existing)
             users_collection.update_one(
                 {"_id": ObjectId(payment["user_id"])},
                 {"$set": {
                     "investment_status": "active",
-                    "initial_investment": payment["amount_usd"],
+                    "initial_investment": new_investment,
                     "investment_time": datetime.now(timezone.utc),
                     "investment_plan": payment["plan"]
                 }}
@@ -3177,8 +3233,8 @@ def paystack_international_callback():
             # Update session if current user
             if session.get("user_id") == payment["user_id"]:
                 session.update({
-                    "investment": f"${payment['amount_usd']:.2f} invested",
-                    "total_investment": f"${payment['amount_usd']:.2f}",
+                    "investment": f"${new_investment:.2f} invested",
+                    "total_investment": f"${new_investment:.2f}",
                     "investment_status": "active"
                 })
             
@@ -3195,7 +3251,7 @@ def paystack_international_callback():
             except Exception as email_error:
                 print(f"Email error: {email_error}")
             
-            flash("Card payment successful! Your investment is now active.", "success")
+            flash(f"Card payment successful! Added ${payment['amount_usd']:.2f} to your investment. Total: ${new_investment:.2f}", "success")
             return redirect(url_for("dashboard"))
         
         flash("Payment verification failed or was not successful!", "error")
@@ -3309,19 +3365,25 @@ def check_paystack_international_payment(reference):
                     }}
                 )
                 
-                # Activate investment
+                # Get current user investment
+                user = users_collection.find_one({"_id": ObjectId(payment["user_id"])})
+                current_investment = float(user.get("initial_investment", 0))
+                new_investment = current_investment + float(payment["amount_usd"])
+                
+                # Activate investment (add to existing)
                 users_collection.update_one(
                     {"_id": ObjectId(payment["user_id"])},
                     {"$set": {
                         "investment_status": "active",
-                        "initial_investment": payment["amount_usd"],
+                        "initial_investment": new_investment,
                         "investment_time": datetime.now(timezone.utc)
                     }}
                 )
                 
                 return jsonify({
                     "status": "completed",
-                    "message": "Payment completed successfully"
+                    "message": f"Payment completed successfully! Added ${payment['amount_usd']:.2f} to investment",
+                    "new_total": new_investment
                 })
         
         return jsonify({
