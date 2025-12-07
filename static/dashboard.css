@@ -165,7 +165,27 @@ h2 {
     z-index: 1000;
     /* Ensure it appears above other elements */
 }
+/* Crypto icons styling */
+.crypto-icon {
+    font-size: 1.5rem;
+}
 
+.crypto-icon.btc {
+    color: #F7931A;
+}
+
+.crypto-icon.erc20 {
+    color: #26A17B;
+}
+
+.crypto-icon.trc20 {
+    color: #FF6B01;
+}
+
+/* Copy address button hover effect */
+.copy-address-btn:hover i {
+    transform: scale(1.1);
+}
 .menu-icon {
     font-size: 24px;
     /* Icon size */
